@@ -52,9 +52,7 @@ Sistem je dizajniran kao mikroservisna aplikacija koja se sastoji od 5 glavnih s
   - Praćenje aktivnosti (trčanje u točku, plivanje, kopanje, socijalna interakcija)
   - Evidencija ishrane (vrsta hrane, količina u gramima, vreme)
   - Beleške o ponašanju
-  - Alarmi za nenormalne vrednosti (npr. temperatura >39°C ili <36°C)
   - Real-time unos podataka
-  - Event notification ka Analytics Service
 
 ### 4. Analytics Service
 - **Odgovornosti**: Agregacija podataka i generisanje izveštaja
@@ -181,45 +179,14 @@ Sistem koristi API Gateway kao centralnu tačku pristupa kroz koju prolazi sva k
   - Rezultati testova
   - Sledeći termin (ako je potreban follow-up)
 - Pregled medicinske istorije životinje
-- Postavljanje alarma za nadolazeće vakcine/preglede
 - Triggerovanje `MedicalTreatmentAdded` eventa
 
 ### Analitike (Upravnik, Veterinar, Admin)
 
-#### Populaciona statistika:
-- Ukupan broj životinja
-- Distribucija po vrstama (pie chart)
-- Distribucija po polu i uzrastu (bar chart)
-- Status breakdown (active, quarantine, etc.)
-
-#### Zdravstveni trendovi:
-- Grafikon težine kroz vreme po životinjama
-- Prosečna temperatura po vrstama
-- Učestalost medicinskih intervencija
-- Najčešće dijagnoze
-
-#### Aktivnost:
-- Prosečna aktivnost po vrstama (bar chart)
-- Heatmap aktivnosti po danu/satu
-- Grafikon raspoloženja kroz vreme
-
-#### Ishrana:
-- Ukupna potrošnja hrane (dnevno, nedeljno, mesečno)
-- Potrošnja po vrstama
-- Distribucija tipova hrane
-
-#### Izveštaji:
-- Mesečni izvještaj (PDF)
-- Godišnji izveštaj (PDF)
+#### Izveštaji (Aktivnost, ishrana, populaciona statistika i zdravlje)
+- Mesečni izvještaji (PDF)
+- Godišnji izveštaji (PDF)
 - Export podataka (CSV, Excel)
-
-### Alarmi i notifikacije (Upravnik, Veterinar)
-- Push notifikacije za:
-  - Nenormalne vrednosti (temperatura, iznenadni pad težine)
-  - Nadolazeće vakcine/pregledi
-  - Potreba za čišćenjem prostorija
-  - Potreba za nabavkom hrane
-- Dashboard sa listom aktivnih alarma
 
 ### Upravljanje korisnicima (Admin)
 - Odobravanje novih registracija
