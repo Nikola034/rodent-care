@@ -62,7 +62,6 @@ Sistem je dizajniran kao mikroservisna aplikacija koja se sastoji od 5 glavnih s
   - Zdravstveni trendovi (težina kroz vreme, učestalost bolesti po vrstama)
   - Grafikoni aktivnosti (dnevni, nedeljni, mesečni)
   - Analitika ishrane (potrošnja hrane po vrsti, optimizacija)
-  - Zaposednutost prostorija kroz vreme
   - Mesečni i godišnji izveštaji
   - Heatmap aktivnosti po danu/satu
   - Prediktivna analitika za zdravstvene probleme
@@ -213,9 +212,6 @@ Sistem koristi API Gateway kao centralnu tačku pristupa kroz koju prolazi sva k
 - **UI komponente**: PrimeNG
 - **Charts**: Chart.js sa ng2-charts
 - **File upload**: ng2-file-upload
-
-### DevOps
-- **Kontejnerizacija**: Docker, Docker Compose
 
 ## Pokretanje projekta
 ```bash
