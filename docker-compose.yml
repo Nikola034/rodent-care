@@ -1,0 +1,115 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database for User Service
+  postgres:
+    image: postgres:16-alpine
+    container_name: rodent-care-postgres
+    environment:
+      POSTGRES_USER: rodentcare
+      POSTGRES_PASSWORD: rodentcare_password
+      POSTGRES_DB: rodent_care_users
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - rodent-care-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rodentcare -d rodent_care_users"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # MongoDB for future services (Rodent Registry, Activity Tracking, Analytics)
+  mongodb:
+    image: mongo:7.0
+    container_name: rodent-care-mongodb
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: rodentcare
+      MONGO_INITDB_ROOT_PASSWORD: rodentcare_password
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - rodent-care-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # RabbitMQ for async communication (future use)
+  rabbitmq:
+    image: rabbitmq:3.12-management-alpine
+    container_name: rodent-care-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: rodentcare
+      RABBITMQ_DEFAULT_PASS: rodentcare_password
+    ports:
+      - "5672:5672"   # AMQP protocol
+      - "15672:15672" # Management UI
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - rodent-care-network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # User Service
+  user-service:
+    build:
+      context: ./backend
+      dockerfile: user-service/Dockerfile
+    container_name: rodent-care-user-service
+    environment:
+      PORT: 8001
+      DATABASE_URL: postgres://rodentcare:rodentcare_password@postgres:5432/rodent_care_users
+      JWT_SECRET: your-super-secret-jwt-key-change-in-production-please
+      JWT_EXPIRATION_HOURS: 24
+      REFRESH_TOKEN_EXPIRATION_DAYS: 7
+      RUST_LOG: info
+    ports:
+      - "8001:8001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - rodent-care-network
+    restart: unless-stopped
+
+  # API Gateway
+  api-gateway:
+    build:
+      context: ./backend
+      dockerfile: api-gateway/Dockerfile
+    container_name: rodent-care-api-gateway
+    environment:
+      PORT: 8000
+      USER_SERVICE_URL: http://user-service:8001
+      RODENT_REGISTRY_SERVICE_URL: http://rodent-registry-service:8002
+      ACTIVITY_TRACKING_SERVICE_URL: http://activity-tracking-service:8003
+      ANALYTICS_SERVICE_URL: http://analytics-service:8004
+      RATE_LIMIT_REQUESTS: 100
+      RATE_LIMIT_WINDOW_SECS: 60
+      RUST_LOG: info
+    ports:
+      - "8000:8000"
+    depends_on:
+      - user-service
+    networks:
+      - rodent-care-network
+    restart: unless-stopped
+
+networks:
+  rodent-care-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  mongodb_data:
+  rabbitmq_data:
