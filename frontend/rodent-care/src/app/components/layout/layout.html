@@ -1,0 +1,67 @@
+<p-toast position="top-right"></p-toast>
+
+<div class="layout-wrapper">
+  <!-- Top Navigation Bar -->
+  <header class="layout-topbar surface-card shadow-2 px-4 py-2">
+    <div class="flex align-items-center justify-content-between">
+      <!-- Logo and Brand -->
+      <div class="flex align-items-center gap-3">
+        <button pButton icon="pi pi-bars" class="p-button-text p-button-rounded lg:hidden"
+          (click)="toggleSidebar()"></button>
+        <div class="flex align-items-center gap-2 cursor-pointer" routerLink="/app">
+          <i class="pi pi-heart-fill text-primary text-3xl"></i>
+          <span class="font-bold text-xl text-primary hidden md:inline">Rodent Care</span>
+        </div>
+      </div>
+
+      <!-- Desktop Menu -->
+      <nav class="hidden lg:flex gap-2">
+        @for (item of menuItems; track item.label) {
+          <a [routerLink]="item.routerLink" routerLinkActive="bg-primary-100"
+            class="flex align-items-center gap-2 px-3 py-2 border-round text-color no-underline hover:surface-hover transition-colors transition-duration-150">
+            <i [class]="item.icon"></i>
+            <span>{{ item.label }}</span>
+          </a>
+        }
+      </nav>
+
+      <!-- User Menu -->
+      <div class="flex align-items-center gap-3">
+        <div class="hidden md:flex flex-column align-items-end">
+          <span class="font-semibold text-sm">{{ username }}</span>
+          <span class="text-xs text-color-secondary">{{ getRoleLabel() }}</span>
+        </div>
+        <p-avatar [label]="getAvatarLabel()" shape="circle" size="large"
+          styleClass="bg-primary text-white cursor-pointer" (click)="userMenu.toggle($event)"></p-avatar>
+        <p-menu #userMenu [model]="userMenuItems" [popup]="true"></p-menu>
+      </div>
+    </div>
+  </header>
+
+  <!-- Mobile Sidebar -->
+  <p-sidebar [(visible)]="sidebarVisible" [modal]="true" styleClass="w-18rem">
+    <ng-template pTemplate="header">
+      <div class="flex align-items-center gap-2">
+        <i class="pi pi-heart-fill text-primary text-2xl"></i>
+        <span class="font-bold text-xl">Rodent Care</span>
+      </div>
+    </ng-template>
+    <ng-template pTemplate="content">
+      <nav class="flex flex-column gap-2 mt-3">
+        @for (item of menuItems; track item.label) {
+          <a [routerLink]="item.routerLink" routerLinkActive="bg-primary-100"
+            (click)="sidebarVisible = false"
+            class="flex align-items-center gap-2 px-3 py-2 border-round text-color no-underline hover:surface-hover transition-colors transition-duration-150">
+            <i [class]="item.icon"></i>
+            <span>{{ item.label }}</span>
+          </a>
+        }
+      </nav>
+    </ng-template>
+  </p-sidebar>
+
+  <!-- Main Content -->
+  <main class="layout-main p-4">
+    <router-outlet></router-outlet>
+  </main>
+</div>

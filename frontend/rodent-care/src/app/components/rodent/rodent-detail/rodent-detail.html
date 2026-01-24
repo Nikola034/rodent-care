@@ -1,0 +1,250 @@
+<p-toast position="top-right"></p-toast>
+<p-confirmDialog></p-confirmDialog>
+
+@if (isLoading) {
+  <div class="flex justify-content-center py-6">
+    <p-progressSpinner></p-progressSpinner>
+  </div>
+} @else if (rodent) {
+  <div class="rodent-detail">
+    <!-- Header -->
+    <div class="flex align-items-center justify-content-between mb-4">
+      <div class="flex align-items-center gap-3">
+        <p-button icon="pi pi-arrow-left" [rounded]="true" [text]="true" (onClick)="navigateBack()"></p-button>
+        <div>
+          <h1 class="text-2xl font-bold text-color m-0">{{ rodent.name }}</h1>
+          <p class="text-color-secondary mt-1 mb-0">{{ getSpeciesLabel(rodent.species) }}</p>
+        </div>
+      </div>
+      @if (canManageRodents()) {
+        <div class="flex gap-2">
+          <p-button label="Edit" icon="pi pi-pencil" [outlined]="true" (onClick)="navigateToEdit()"></p-button>
+          <p-button label="Delete" icon="pi pi-trash" severity="danger" [outlined]="true"
+            (onClick)="confirmDeleteRodent()"></p-button>
+        </div>
+      }
+    </div>
+
+    <div class="grid">
+      <!-- Main Content -->
+      <div class="col-12 lg:col-8">
+        <p-tabView>
+          <!-- Overview Tab -->
+          <p-tabPanel header="Overview">
+            <div class="grid">
+              <!-- Basic Info -->
+              <div class="col-12 md:col-6">
+                <p-card header="Basic Information">
+                  <div class="flex flex-column gap-3">
+                    <div class="flex justify-content-between">
+                      <span class="text-color-secondary">Status</span>
+                      <p-tag [value]="getStatusLabel(rodent.status)"
+                        [severity]="getStatusSeverity(rodent.status)"></p-tag>
+                    </div>
+                    <div class="flex justify-content-between">
+                      <span class="text-color-secondary">Species</span>
+                      <span class="font-semibold">{{ getSpeciesLabel(rodent.species) }}</span>
+                    </div>
+                    <div class="flex justify-content-between">
+                      <span class="text-color-secondary">Gender</span>
+                      <span class="font-semibold">{{ getGenderLabel(rodent.gender) }}</span>
+                    </div>
+                    <div class="flex justify-content-between">
+                      <span class="text-color-secondary">Age</span>
+                      <span class="font-semibold">{{ formatAge(rodent.age_months) }}</span>
+                    </div>
+                    @if (rodent.date_of_birth) {
+                      <div class="flex justify-content-between">
+                        <span class="text-color-secondary">Date of Birth</span>
+                        <span class="font-semibold">
+                          {{ rodent.date_of_birth | date:'mediumDate' }}
+                          @if (rodent.date_of_birth_estimated) {
+                            <span class="text-color-secondary">(est.)</span>
+                          }
+                        </span>
+                      </div>
+                    }
+                    @if (rodent.chip_id) {
+                      <div class="flex justify-content-between">
+                        <span class="text-color-secondary">Chip ID</span>
+                        <span class="font-semibold font-mono">{{ rodent.chip_id }}</span>
+                      </div>
+                    }
+                    <div class="flex justify-content-between">
+                      <span class="text-color-secondary">Intake Date</span>
+                      <span class="font-semibold">{{ rodent.intake_date | date:'mediumDate' }}</span>
+                    </div>
+                  </div>
+
+                  @if (canManageRodents()) {
+                    <div class="mt-4 pt-3 border-top-1 surface-border">
+                      <p-button label="Change Status" icon="pi pi-refresh" [outlined]="true" size="small"
+                        (onClick)="openStatusDialog()"></p-button>
+                    </div>
+                  }
+                </p-card>
+              </div>
+
+              <!-- Notes -->
+              <div class="col-12 md:col-6">
+                <p-card header="Notes" styleClass="h-full">
+                  @if (rodent.notes) {
+                    <p class="m-0 white-space-pre-wrap">{{ rodent.notes }}</p>
+                  } @else {
+                    <p class="m-0 text-color-secondary">No notes available</p>
+                  }
+                </p-card>
+              </div>
+            </div>
+          </p-tabPanel>
+
+          <!-- Images Tab -->
+          <p-tabPanel header="Images ({{ rodent.images.length }})">
+            @if (canManageRodents()) {
+              <div class="mb-4">
+                <p-fileUpload mode="basic" name="image" accept="image/*" [maxFileSize]="5000000"
+                  chooseLabel="Upload Image" (onSelect)="onImageUpload($event)"
+                  [disabled]="isUploadingImage"></p-fileUpload>
+              </div>
+            }
+
+            @if (rodent.images.length > 0) {
+              <div class="grid">
+                @for (image of rodent.images; track image.id) {
+                  <div class="col-12 sm:col-6 md:col-4">
+                    <div class="relative border-round overflow-hidden surface-border border-1">
+                      <img [src]="getImageUrl(image)" [alt]="rodent.name"
+                        class="w-full" style="height: 200px; object-fit: cover;" />
+                      @if (image.is_primary) {
+                        <span class="absolute" style="top: 0.5rem; left: 0.5rem;">
+                          <p-tag value="Primary" severity="success"></p-tag>
+                        </span>
+                      }
+                      @if (canManageRodents()) {
+                        <div class="absolute flex gap-1" style="top: 0.5rem; right: 0.5rem;">
+                          @if (!image.is_primary) {
+                            <p-button icon="pi pi-star" [rounded]="true" size="small"
+                              pTooltip="Set as Primary" (onClick)="setPrimaryImage(image)"></p-button>
+                          }
+                          <p-button icon="pi pi-trash" [rounded]="true" size="small" severity="danger"
+                            pTooltip="Delete" (onClick)="confirmDeleteImage(image)"></p-button>
+                        </div>
+                      }
+                    </div>
+                    <p class="text-sm text-color-secondary mt-2 mb-0">
+                      Uploaded {{ image.uploaded_at | date:'medium' }}
+                    </p>
+                  </div>
+                }
+              </div>
+            } @else {
+              <div class="text-center py-6">
+                <i class="pi pi-image text-5xl text-color-secondary mb-3"></i>
+                <p class="text-color-secondary">No images uploaded yet</p>
+              </div>
+            }
+          </p-tabPanel>
+
+          <!-- Status History Tab -->
+          <p-tabPanel header="Status History">
+            @if (isLoadingHistory) {
+              <div class="flex justify-content-center py-4">
+                <p-progressSpinner></p-progressSpinner>
+              </div>
+            } @else if (statusHistory.length > 0) {
+              <p-timeline [value]="statusHistory" align="left">
+                <ng-template pTemplate="content" let-event>
+                  <div class="surface-ground p-3 border-round mb-3">
+                    <div class="flex align-items-center gap-2 mb-2">
+                      <p-tag [value]="getStatusLabel(event.old_status)"
+                        [severity]="getStatusSeverity(event.old_status)"></p-tag>
+                      <i class="pi pi-arrow-right text-color-secondary"></i>
+                      <p-tag [value]="getStatusLabel(event.new_status)"
+                        [severity]="getStatusSeverity(event.new_status)"></p-tag>
+                    </div>
+                    @if (event.reason) {
+                      <p class="m-0 text-sm">{{ event.reason }}</p>
+                    }
+                    <p class="m-0 text-xs text-color-secondary mt-2">
+                      by {{ event.changed_by_name }} on {{ event.changed_at | date:'medium' }}
+                    </p>
+                  </div>
+                </ng-template>
+              </p-timeline>
+            } @else {
+              <div class="text-center py-6">
+                <i class="pi pi-history text-5xl text-color-secondary mb-3"></i>
+                <p class="text-color-secondary">No status changes recorded</p>
+              </div>
+            }
+          </p-tabPanel>
+        </p-tabView>
+      </div>
+
+      <!-- Sidebar -->
+      <div class="col-12 lg:col-4">
+        <!-- Image Preview -->
+        <p-card styleClass="mb-3">
+          @if (getPrimaryImage()) {
+            <img [src]="getPrimaryImage()" [alt]="rodent.name"
+              class="w-full border-round" style="max-height: 300px; object-fit: cover;" />
+          } @else {
+            <div class="flex align-items-center justify-content-center bg-primary-100 border-round"
+              style="height: 200px;">
+              <i class="pi pi-heart-fill text-primary text-6xl"></i>
+            </div>
+          }
+        </p-card>
+
+        <!-- Quick Actions -->
+        <p-card header="Quick Actions">
+          <div class="flex flex-column gap-2">
+            <p-button label="Medical Records" icon="pi pi-file-edit" [outlined]="true"
+              styleClass="w-full" (onClick)="navigateToMedicalRecords()"></p-button>
+            @if (canManageRodents()) {
+              <p-button label="Change Status" icon="pi pi-refresh" [outlined]="true"
+                styleClass="w-full" (onClick)="openStatusDialog()"></p-button>
+              <p-button label="Edit Details" icon="pi pi-pencil" [outlined]="true"
+                styleClass="w-full" (onClick)="navigateToEdit()"></p-button>
+            }
+          </div>
+        </p-card>
+
+        <!-- Timestamps -->
+        <p-card header="Record Info" styleClass="mt-3">
+          <div class="flex flex-column gap-2">
+            <div class="flex justify-content-between">
+              <span class="text-color-secondary text-sm">Created</span>
+              <span class="text-sm">{{ rodent.created_at | date:'medium' }}</span>
+            </div>
+            <div class="flex justify-content-between">
+              <span class="text-color-secondary text-sm">Last Updated</span>
+              <span class="text-sm">{{ rodent.updated_at | date:'medium' }}</span>
+            </div>
+          </div>
+        </p-card>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- Status Change Dialog -->
+<p-dialog header="Change Status" [(visible)]="showStatusDialog" [modal]="true" [style]="{width: '400px'}">
+  <div class="flex flex-column gap-3">
+    <div class="field">
+      <label for="newStatus" class="font-semibold">New Status</label>
+      <p-dropdown id="newStatus" [(ngModel)]="newStatus" [options]="statusOptions"
+        placeholder="Select new status" styleClass="w-full"></p-dropdown>
+    </div>
+    <div class="field">
+      <label for="statusReason" class="font-semibold">Reason (optional)</label>
+      <textarea pInputTextarea id="statusReason" [(ngModel)]="statusReason" rows="3"
+        class="w-full" placeholder="Enter reason for status change..."></textarea>
+    </div>
+  </div>
+  <ng-template pTemplate="footer">
+    <p-button label="Cancel" [text]="true" (onClick)="showStatusDialog = false"></p-button>
+    <p-button label="Change Status" icon="pi pi-check" (onClick)="changeStatus()"
+      [loading]="isChangingStatus" [disabled]="!newStatus || newStatus === rodent?.status"></p-button>
+  </ng-template>
+</p-dialog>
