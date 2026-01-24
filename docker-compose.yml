@@ -82,6 +82,30 @@ services:
       - rodent-care-network
     restart: unless-stopped
 
+  # Rodent Registry Service
+  rodent-registry-service:
+    build:
+      context: ./backend
+      dockerfile: rodent-registry-service/Dockerfile
+    container_name: rodent-care-rodent-registry-service
+    environment:
+      PORT: 8002
+      MONGODB_URI: mongodb://rodentcare:rodentcare_password@mongodb:27017/?authSource=admin
+      DATABASE_NAME: rodent_registry
+      USER_SERVICE_URL: http://user-service:8001
+      MAX_IMAGE_SIZE_MB: 5
+      RUST_LOG: info
+    ports:
+      - "8002:8002"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      user-service:
+        condition: service_started
+    networks:
+      - rodent-care-network
+    restart: unless-stopped
+
   # API Gateway
   api-gateway:
     build:
@@ -101,6 +125,7 @@ services:
       - "8000:8000"
     depends_on:
       - user-service
+      - rodent-registry-service
     networks:
       - rodent-care-network
     restart: unless-stopped

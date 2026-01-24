@@ -64,7 +64,7 @@ async fn main() {
 
     // Build router
     let app = Router::new()
-        .nest("/api", handlers::create_routes())
+        .nest("/api", handlers::create_routes(state.clone()))
         .layer(cors)
         .layer(TraceLayer::new_for_http())
         .with_state(state);

@@ -61,9 +61,12 @@ pub async fn auth_middleware(
     };
 
     // Validate token with User Service
+    tracing::debug!("Validating token with User Service at: {}/api/auth/validate", state.config.user_service_url);
+
     let validation_response = state
         .http_client
         .post(format!("{}/api/auth/validate", state.config.user_service_url))
+        .header("Content-Type", "application/json")
         .json(&serde_json::json!({ "token": token }))
         .send()
         .await
@@ -72,10 +75,17 @@ pub async fn auth_middleware(
             GatewayError::ServiceUnavailable("User service unavailable".to_string())
         })?;
 
+    tracing::debug!("Token validation response status: {}", validation_response.status());
+
     let validation: TokenValidationResponse = validation_response
         .json()
         .await
-        .map_err(|_| GatewayError::InternalError)?;
+        .map_err(|e| {
+            tracing::error!("Failed to parse validation response: {:?}", e);
+            GatewayError::InternalError
+        })?;
+
+    tracing::debug!("Token validation result: valid={}", validation.valid);
 
     if !validation.valid {
         return Err(GatewayError::InvalidToken);

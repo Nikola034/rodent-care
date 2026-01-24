@@ -25,6 +25,20 @@ pub async fn health_check() -> impl IntoResponse {
     }))
 }
 
+// Fallback handler for unmatched routes
+pub async fn fallback_handler(request: Request<Body>) -> impl IntoResponse {
+    let method = request.method().clone();
+    let uri = request.uri().clone();
+    tracing::warn!("No route matched: {} {}", method, uri);
+    (
+        axum::http::StatusCode::NOT_FOUND,
+        Json(json!({
+            "success": false,
+            "error": format!("Route not found: {} {}", method, uri)
+        }))
+    )
+}
+
 // Service health aggregation
 pub async fn services_health(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     let user_service_health = state
@@ -35,11 +49,19 @@ pub async fn services_health(State(state): State<Arc<AppState>>) -> impl IntoRes
         .map(|r| r.status().is_success())
         .unwrap_or(false);
 
+    let rodent_registry_health = state
+        .http_client
+        .get(format!("{}/api/health", state.config.rodent_registry_service_url))
+        .send()
+        .await
+        .map(|r| r.status().is_success())
+        .unwrap_or(false);
+
     Json(json!({
         "success": true,
         "services": {
             "user_service": user_service_health,
-            "rodent_registry_service": false,  // Not implemented yet
+            "rodent_registry_service": rodent_registry_health,
             "activity_tracking_service": false, // Not implemented yet
             "analytics_service": false // Not implemented yet
         }
@@ -62,7 +84,7 @@ pub async fn proxy_to_user_service_protected(
     proxy_request(State(state.clone()), &state.config.user_service_url, request).await
 }
 
-// Proxy to Rodent Registry Service (placeholder for future)
+// Proxy to Rodent Registry Service
 pub async fn proxy_to_rodent_registry_service(
     State(state): State<Arc<AppState>>,
     request: Request<Body>,
@@ -86,7 +108,7 @@ pub async fn proxy_to_analytics_service(
     proxy_request(State(state.clone()), &state.config.analytics_service_url, request).await
 }
 
-pub fn create_routes() -> Router<Arc<AppState>> {
+pub fn create_routes(state: Arc<AppState>) -> Router<Arc<AppState>> {
     // Public routes (no authentication required)
     let public_routes = Router::new()
         .route("/health", get(health_check))
@@ -96,26 +118,21 @@ pub fn create_routes() -> Router<Arc<AppState>> {
         .route("/auth/login", any(proxy_to_user_service_public))
         .route("/auth/refresh", any(proxy_to_user_service_public));
 
-    // Protected routes (authentication required)
+    // Protected User Service routes (authentication required)
     let protected_user_routes = Router::new()
         .route("/auth/logout", any(proxy_to_user_service_protected))
         .route("/auth/validate", any(proxy_to_user_service_protected))
         .route("/users", any(proxy_to_user_service_protected))
         .route("/users/*path", any(proxy_to_user_service_protected))
-        .layer(middleware::from_fn_with_state(
-            Arc::new(AppState {
-                config: crate::config::Config::from_env(),
-                http_client: reqwest::Client::new(),
-                rate_limiter: crate::rate_limiter::RateLimiter::new(100, 60),
-            }),
-            auth_middleware,
-        ));
+        .layer(middleware::from_fn_with_state(state.clone(), auth_middleware));
 
-    // Future routes for other services (currently return service unavailable)
+    // Rodent Registry Service routes (protected with authentication)
     let rodent_routes = Router::new()
         .route("/rodents", any(proxy_to_rodent_registry_service))
-        .route("/rodents/*path", any(proxy_to_rodent_registry_service));
+        .route("/rodents/*path", any(proxy_to_rodent_registry_service))
+        .layer(middleware::from_fn_with_state(state.clone(), auth_middleware));
 
+    // Future service routes (placeholders)
     let activity_routes = Router::new()
         .route("/activities", any(proxy_to_activity_tracking_service))
         .route("/activities/*path", any(proxy_to_activity_tracking_service));
@@ -131,12 +148,6 @@ pub fn create_routes() -> Router<Arc<AppState>> {
         .merge(rodent_routes)
         .merge(activity_routes)
         .merge(analytics_routes)
-        .layer(middleware::from_fn_with_state(
-            Arc::new(AppState {
-                config: crate::config::Config::from_env(),
-                http_client: reqwest::Client::new(),
-                rate_limiter: crate::rate_limiter::RateLimiter::new(100, 60),
-            }),
-            rate_limit_middleware,
-        ))
+        .fallback(fallback_handler)
+        .layer(middleware::from_fn_with_state(state, rate_limit_middleware))
 }

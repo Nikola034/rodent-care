@@ -13,16 +13,17 @@ pub async fn proxy_request(
     target_url: &str,
     req: Request<Body>,
 ) -> Result<Response, GatewayError> {
-    // Build the full URL
+    // Build the full URL - add /api prefix since routes are nested under /api
     let uri = req.uri();
     let path_and_query = uri
         .path_and_query()
         .map(|pq| pq.as_str())
         .unwrap_or("");
     
-    let full_url = format!("{}{}", target_url, path_and_query);
-    
-    tracing::debug!("Proxying request to: {}", full_url);
+    // The path comes without /api prefix because of nesting, so we add it back
+    let full_url = format!("{}/api{}", target_url, path_and_query);
+
+    tracing::info!("Proxying {} {} to: {}", req.method(), path_and_query, full_url);
 
     // Build the proxied request - convert axum Method to reqwest Method
     let method = req.method().clone();
