@@ -1,3 +1,4 @@
+use axum::Router;
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
@@ -63,9 +64,11 @@ async fn main() {
     });
 
     // Build router with middleware
-    let app = routes::create_routes(state)
+    let app = Router::new()
+        .nest("/api", routes::create_routes())
         .layer(CorsLayer::permissive())
-        .layer(TraceLayer::new_for_http());
+        .layer(TraceLayer::new_for_http())
+        .with_state(state);
 
     // Start server
     let addr = format!("0.0.0.0:{}", config.port);

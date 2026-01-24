@@ -1,12 +1,13 @@
 use axum::{
     extract::{Multipart, Path, Query, State},
-    http::StatusCode,
-    Extension, Json,
+    http::{header, HeaderMap, StatusCode},
+    Json,
 };
 use base64::Engine;
 use bson::{doc, oid::ObjectId, Document};
 use chrono::Utc;
 use futures::TryStreamExt;
+use jsonwebtoken::{decode, DecodingKey, Validation};
 use mongodb::options::FindOptions;
 use std::sync::Arc;
 use uuid::Uuid;
@@ -18,6 +19,36 @@ use crate::{
     models::*,
     AppState,
 };
+
+// Helper function to extract AuthInfo from Authorization header
+fn extract_auth_info(state: &AppState, headers: &HeaderMap) -> Result<AuthInfo, AppError> {
+    let auth_header = headers
+        .get(header::AUTHORIZATION)
+        .and_then(|h| h.to_str().ok())
+        .ok_or(AppError::InvalidToken)?;
+
+    let token = if auth_header.starts_with("Bearer ") {
+        &auth_header[7..]
+    } else {
+        return Err(AppError::InvalidToken);
+    };
+
+    let claims = decode::<Claims>(
+        token,
+        &DecodingKey::from_secret(state.config.jwt_secret.as_bytes()),
+        &Validation::default(),
+    )
+    .map_err(|e| {
+        tracing::debug!("Token validation failed: {:?}", e);
+        match e.kind() {
+            jsonwebtoken::errors::ErrorKind::ExpiredSignature => AppError::TokenExpired,
+            _ => AppError::InvalidToken,
+        }
+    })?
+    .claims;
+
+    Ok(AuthInfo::from(claims))
+}
 
 // ============== Health Check ==============
 
@@ -33,9 +64,10 @@ pub async fn health_check() -> Json<MessageResponse> {
 /// List all rodents with filtering and pagination
 pub async fn list_rodents(
     State(state): State<Arc<AppState>>,
-    Extension(auth_info): Extension<AuthInfo>,
+    headers: HeaderMap,
     Query(params): Query<RodentQueryParams>,
 ) -> Result<Json<RodentListResponse>, AppError> {
+    let auth_info = extract_auth_info(&state, &headers)?;
     can_view(&auth_info)?;
 
     let collection = state.db.db.collection::<Rodent>("rodents");
@@ -83,13 +115,23 @@ pub async fn list_rodents(
     // Get total count
     let total = collection.count_documents(filter.clone(), None).await?;
 
-    // Get rodents
-    let mut cursor = collection.find(filter, find_options).await?;
+    // Get rodents - use Document first to debug deserialization issues
+    let raw_collection = state.db.db.collection::<Document>("rodents");
+    let mut cursor = raw_collection.find(filter, find_options).await?;
     let mut rodents = Vec::new();
 
-    while let Some(rodent) = cursor.try_next().await? {
-        rodents.push(RodentResponse::from(rodent));
+    while let Some(doc) = cursor.try_next().await? {
+        match bson::from_document::<Rodent>(doc.clone()) {
+            Ok(rodent) => rodents.push(RodentResponse::from(rodent)),
+            Err(e) => {
+                tracing::error!("Failed to deserialize rodent: {:?}", e);
+                tracing::error!("Document was: {:?}", doc);
+                return Err(AppError::DatabaseError(format!("Deserialization error: {}", e)));
+            }
+        }
     }
+
+    tracing::debug!("Found {} rodents", rodents.len());
 
     Ok(Json(RodentListResponse {
         success: true,
@@ -103,9 +145,10 @@ pub async fn list_rodents(
 /// Get a single rodent by ID
 pub async fn get_rodent(
     State(state): State<Arc<AppState>>,
-    Extension(auth_info): Extension<AuthInfo>,
+    headers: HeaderMap,
     Path(id): Path<String>,
 ) -> Result<Json<SingleRodentResponse>, AppError> {
+    let auth_info = extract_auth_info(&state, &headers)?;
     can_view(&auth_info)?;
 
     let object_id = ObjectId::parse_str(&id).map_err(|_| AppError::InvalidRodentId)?;
@@ -125,9 +168,10 @@ pub async fn get_rodent(
 /// Create a new rodent
 pub async fn create_rodent(
     State(state): State<Arc<AppState>>,
-    Extension(auth_info): Extension<AuthInfo>,
+    headers: HeaderMap,
     Json(payload): Json<CreateRodentRequest>,
 ) -> Result<(StatusCode, Json<SingleRodentResponse>), AppError> {
+    let auth_info = extract_auth_info(&state, &headers)?;
     can_manage_rodents(&auth_info)?;
     payload.validate()?;
 
@@ -173,10 +217,11 @@ pub async fn create_rodent(
 /// Update a rodent
 pub async fn update_rodent(
     State(state): State<Arc<AppState>>,
-    Extension(auth_info): Extension<AuthInfo>,
+    headers: HeaderMap,
     Path(id): Path<String>,
     Json(payload): Json<UpdateRodentRequest>,
 ) -> Result<Json<SingleRodentResponse>, AppError> {
+    let auth_info = extract_auth_info(&state, &headers)?;
     can_manage_rodents(&auth_info)?;
     payload.validate()?;
 
@@ -236,10 +281,11 @@ pub async fn update_rodent(
 /// Update rodent status
 pub async fn update_rodent_status(
     State(state): State<Arc<AppState>>,
-    Extension(auth_info): Extension<AuthInfo>,
+    headers: HeaderMap,
     Path(id): Path<String>,
     Json(payload): Json<UpdateRodentStatusRequest>,
 ) -> Result<Json<SingleRodentResponse>, AppError> {
+    let auth_info = extract_auth_info(&state, &headers)?;
     can_manage_rodents(&auth_info)?;
     payload.validate()?;
 
@@ -300,9 +346,10 @@ pub async fn update_rodent_status(
 /// Delete a rodent
 pub async fn delete_rodent(
     State(state): State<Arc<AppState>>,
-    Extension(auth_info): Extension<AuthInfo>,
+    headers: HeaderMap,
     Path(id): Path<String>,
 ) -> Result<Json<MessageResponse>, AppError> {
+    let auth_info = extract_auth_info(&state, &headers)?;
     can_manage_rodents(&auth_info)?;
 
     let object_id = ObjectId::parse_str(&id).map_err(|_| AppError::InvalidRodentId)?;
@@ -340,9 +387,10 @@ pub async fn delete_rodent(
 /// Get rodent status history
 pub async fn get_rodent_status_history(
     State(state): State<Arc<AppState>>,
-    Extension(auth_info): Extension<AuthInfo>,
+    headers: HeaderMap,
     Path(id): Path<String>,
 ) -> Result<Json<StatusHistoryListResponse>, AppError> {
+    let auth_info = extract_auth_info(&state, &headers)?;
     can_view(&auth_info)?;
 
     let object_id = ObjectId::parse_str(&id).map_err(|_| AppError::InvalidRodentId)?;
@@ -380,10 +428,11 @@ pub async fn get_rodent_status_history(
 /// Upload an image for a rodent
 pub async fn upload_rodent_image(
     State(state): State<Arc<AppState>>,
-    Extension(auth_info): Extension<AuthInfo>,
+    headers: HeaderMap,
     Path(id): Path<String>,
     mut multipart: Multipart,
 ) -> Result<Json<ImageUploadResponse>, AppError> {
+    let auth_info = extract_auth_info(&state, &headers)?;
     can_manage_rodents(&auth_info)?;
 
     let object_id = ObjectId::parse_str(&id).map_err(|_| AppError::InvalidRodentId)?;
@@ -487,9 +536,10 @@ pub async fn upload_rodent_image(
 /// Delete a rodent image
 pub async fn delete_rodent_image(
     State(state): State<Arc<AppState>>,
-    Extension(auth_info): Extension<AuthInfo>,
+    headers: HeaderMap,
     Path((rodent_id, image_id)): Path<(String, String)>,
 ) -> Result<Json<MessageResponse>, AppError> {
+    let auth_info = extract_auth_info(&state, &headers)?;
     can_manage_rodents(&auth_info)?;
 
     let object_id = ObjectId::parse_str(&rodent_id).map_err(|_| AppError::InvalidRodentId)?;
@@ -519,9 +569,10 @@ pub async fn delete_rodent_image(
 /// Set an image as primary
 pub async fn set_primary_image(
     State(state): State<Arc<AppState>>,
-    Extension(auth_info): Extension<AuthInfo>,
+    headers: HeaderMap,
     Path((rodent_id, image_id)): Path<(String, String)>,
 ) -> Result<Json<MessageResponse>, AppError> {
+    let auth_info = extract_auth_info(&state, &headers)?;
     can_manage_rodents(&auth_info)?;
 
     let object_id = ObjectId::parse_str(&rodent_id).map_err(|_| AppError::InvalidRodentId)?;
@@ -566,10 +617,11 @@ pub async fn set_primary_image(
 /// List medical records for a rodent
 pub async fn list_medical_records(
     State(state): State<Arc<AppState>>,
-    Extension(auth_info): Extension<AuthInfo>,
+    headers: HeaderMap,
     Path(rodent_id): Path<String>,
     Query(params): Query<MedicalRecordQueryParams>,
 ) -> Result<Json<MedicalRecordListResponse>, AppError> {
+    let auth_info = extract_auth_info(&state, &headers)?;
     can_view(&auth_info)?;
 
     let object_id = ObjectId::parse_str(&rodent_id).map_err(|_| AppError::InvalidRodentId)?;
@@ -635,9 +687,10 @@ pub async fn list_medical_records(
 /// Get a single medical record
 pub async fn get_medical_record(
     State(state): State<Arc<AppState>>,
-    Extension(auth_info): Extension<AuthInfo>,
+    headers: HeaderMap,
     Path((rodent_id, record_id)): Path<(String, String)>,
 ) -> Result<Json<SingleMedicalRecordResponse>, AppError> {
+    let auth_info = extract_auth_info(&state, &headers)?;
     can_view(&auth_info)?;
 
     let rodent_oid = ObjectId::parse_str(&rodent_id).map_err(|_| AppError::InvalidRodentId)?;
@@ -659,10 +712,11 @@ pub async fn get_medical_record(
 /// Create a medical record
 pub async fn create_medical_record(
     State(state): State<Arc<AppState>>,
-    Extension(auth_info): Extension<AuthInfo>,
+    headers: HeaderMap,
     Path(rodent_id): Path<String>,
     Json(payload): Json<CreateMedicalRecordRequest>,
 ) -> Result<(StatusCode, Json<SingleMedicalRecordResponse>), AppError> {
+    let auth_info = extract_auth_info(&state, &headers)?;
     can_manage_medical_records(&auth_info)?;
     payload.validate()?;
 
@@ -714,10 +768,11 @@ pub async fn create_medical_record(
 /// Update a medical record
 pub async fn update_medical_record(
     State(state): State<Arc<AppState>>,
-    Extension(auth_info): Extension<AuthInfo>,
+    headers: HeaderMap,
     Path((rodent_id, record_id)): Path<(String, String)>,
     Json(payload): Json<UpdateMedicalRecordRequest>,
 ) -> Result<Json<SingleMedicalRecordResponse>, AppError> {
+    let auth_info = extract_auth_info(&state, &headers)?;
     can_manage_medical_records(&auth_info)?;
     payload.validate()?;
 
@@ -780,9 +835,10 @@ pub async fn update_medical_record(
 /// Delete a medical record
 pub async fn delete_medical_record(
     State(state): State<Arc<AppState>>,
-    Extension(auth_info): Extension<AuthInfo>,
+    headers: HeaderMap,
     Path((rodent_id, record_id)): Path<(String, String)>,
 ) -> Result<Json<MessageResponse>, AppError> {
+    let auth_info = extract_auth_info(&state, &headers)?;
     can_manage_medical_records(&auth_info)?;
 
     let rodent_oid = ObjectId::parse_str(&rodent_id).map_err(|_| AppError::InvalidRodentId)?;

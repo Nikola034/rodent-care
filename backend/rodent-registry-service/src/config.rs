@@ -7,6 +7,7 @@ pub struct Config {
     pub database_name: String,
     pub user_service_url: String,
     pub max_image_size_mb: usize,
+    pub jwt_secret: String,
 }
 
 impl Config {
@@ -26,6 +27,8 @@ impl Config {
                 .unwrap_or_else(|_| "5".to_string())
                 .parse()
                 .expect("MAX_IMAGE_SIZE_MB must be a number"),
+            jwt_secret: env::var("JWT_SECRET")
+                .expect("JWT_SECRET must be set"),
         }
     }
 }

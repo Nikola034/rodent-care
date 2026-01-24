@@ -94,14 +94,18 @@ pub struct Rodent {
     pub species: Species,
     pub name: String,
     pub gender: Gender,
+    #[serde(default, with = "bson::serde_helpers::chrono_datetime_as_bson_datetime_optional")]
     pub date_of_birth: Option<DateTime<Utc>>,
     pub date_of_birth_estimated: bool,
     pub chip_id: Option<String>,
     pub status: RodentStatus,
     pub notes: Option<String>,
     pub images: Vec<RodentImage>,
+    #[serde(with = "bson::serde_helpers::chrono_datetime_as_bson_datetime")]
     pub intake_date: DateTime<Utc>,
+    #[serde(with = "bson::serde_helpers::chrono_datetime_as_bson_datetime")]
     pub created_at: DateTime<Utc>,
+    #[serde(with = "bson::serde_helpers::chrono_datetime_as_bson_datetime")]
     pub updated_at: DateTime<Utc>,
     pub created_by: String,
     pub updated_by: String,
@@ -113,6 +117,7 @@ pub struct RodentImage {
     pub filename: String,
     pub content_type: String,
     pub data: String, // Base64 encoded image data
+    #[serde(with = "bson::serde_helpers::chrono_datetime_as_bson_datetime")]
     pub uploaded_at: DateTime<Utc>,
     pub is_primary: bool,
 }
@@ -123,15 +128,19 @@ pub struct MedicalRecord {
     pub id: Option<ObjectId>,
     pub rodent_id: ObjectId,
     pub record_type: MedicalRecordType,
+    #[serde(with = "bson::serde_helpers::chrono_datetime_as_bson_datetime")]
     pub date: DateTime<Utc>,
     pub description: String,
     pub diagnosis: Option<String>,
     pub medications: Vec<Medication>,
     pub test_results: Option<String>,
+    #[serde(default, with = "bson::serde_helpers::chrono_datetime_as_bson_datetime_optional")]
     pub next_appointment: Option<DateTime<Utc>>,
     pub veterinarian_id: String,
     pub veterinarian_name: String,
+    #[serde(with = "bson::serde_helpers::chrono_datetime_as_bson_datetime")]
     pub created_at: DateTime<Utc>,
+    #[serde(with = "bson::serde_helpers::chrono_datetime_as_bson_datetime")]
     pub updated_at: DateTime<Utc>,
 }
 
@@ -154,6 +163,7 @@ pub struct StatusHistory {
     pub reason: Option<String>,
     pub changed_by: String,
     pub changed_by_name: String,
+    #[serde(with = "bson::serde_helpers::chrono_datetime_as_bson_datetime")]
     pub changed_at: DateTime<Utc>,
 }
 
@@ -372,11 +382,31 @@ pub struct ImageUploadResponse {
 
 // ============== Auth Info ==============
 
+/// JWT Claims structure matching user-service tokens
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Claims {
+    pub sub: String,      // user_id
+    pub username: String,
+    pub role: String,
+    pub exp: usize,       // expiration time
+    pub iat: usize,       // issued at
+}
+
 #[derive(Debug, Clone)]
 pub struct AuthInfo {
     pub user_id: String,
     pub username: String,
     pub role: String,
+}
+
+impl From<Claims> for AuthInfo {
+    fn from(claims: Claims) -> Self {
+        Self {
+            user_id: claims.sub,
+            username: claims.username,
+            role: claims.role,
+        }
+    }
 }
 
 // ============== Helper Implementations ==============

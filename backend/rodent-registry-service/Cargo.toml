@@ -26,6 +26,7 @@ thiserror = "1"
 validator = { version = "0.16", features = ["derive"] }
 futures = "0.3"
 base64 = "0.21"
+jsonwebtoken = "9"
 
 # Logging
 tracing = "0.1"

@@ -87,6 +87,7 @@ impl IntoResponse for AppError {
 
 impl From<mongodb::error::Error> for AppError {
     fn from(err: mongodb::error::Error) -> Self {
+        tracing::error!("MongoDB error: {:?}", err);
         // Check for duplicate key error
         if let mongodb::error::ErrorKind::Write(write_failure) = err.kind.as_ref() {
             if let mongodb::error::WriteFailure::WriteError(write_error) = write_failure {

@@ -1,20 +1,16 @@
 use axum::{
-    middleware,
     routing::{delete, get, post, put},
     Router,
 };
 use std::sync::Arc;
 
-use crate::{handlers, middleware::auth_middleware, AppState};
+use crate::{handlers, AppState};
 
-pub fn create_routes(state: Arc<AppState>) -> Router {
-    // Public routes (health check only)
-    let public_routes = Router::new()
-        .route("/health", get(handlers::health_check));
-
-    // Protected routes (require authentication)
-    let protected_routes = Router::new()
-        // Rodent routes
+pub fn create_routes() -> Router<Arc<AppState>> {
+    Router::new()
+        // Public routes
+        .route("/health", get(handlers::health_check))
+        // Rodent routes (authentication handled by API Gateway)
         .route("/rodents", get(handlers::list_rodents))
         .route("/rodents", post(handlers::create_rodent))
         .route("/rodents/:id", get(handlers::get_rodent))
@@ -32,10 +28,4 @@ pub fn create_routes(state: Arc<AppState>) -> Router {
         .route("/rodents/:rodent_id/medical-records/:record_id", get(handlers::get_medical_record))
         .route("/rodents/:rodent_id/medical-records/:record_id", put(handlers::update_medical_record))
         .route("/rodents/:rodent_id/medical-records/:record_id", delete(handlers::delete_medical_record))
-        .layer(middleware::from_fn_with_state(state.clone(), auth_middleware));
-
-    // Combine routes under /api prefix
-    Router::new()
-        .nest("/api", public_routes.merge(protected_routes))
-        .with_state(state)
 }
