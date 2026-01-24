@@ -272,28 +272,28 @@ export class AuthService {
    * Check if user is a Volunteer
    */
   isVolunteer(): boolean {
-    return this.getRoleFromToken() === 'volunteer';
+    return this.getRoleFromToken() === 'Volunteer';
   }
 
   /**
    * Check if user is a Caretaker
    */
   isCaretaker(): boolean {
-    return this.getRoleFromToken() === 'caretaker';
+    return this.getRoleFromToken() === 'Caretaker';
   }
 
   /**
    * Check if user is a Veterinarian
    */
   isVeterinarian(): boolean {
-    return this.getRoleFromToken() === 'veterinarian';
+    return this.getRoleFromToken() === 'Veterinarian';
   }
 
   /**
    * Check if user is an Admin
    */
   isAdmin(): boolean {
-    return this.getRoleFromToken() === 'admin';
+    return this.getRoleFromToken() === 'Admin';
   }
 
   /**
@@ -301,7 +301,7 @@ export class AuthService {
    */
   canManageRodents(): boolean {
     const role = this.getRoleFromToken();
-    return role === 'admin' || role === 'caretaker' || role === 'veterinarian';
+    return role === 'Admin' || role === 'Caretaker';
   }
 
   /**
@@ -309,7 +309,7 @@ export class AuthService {
    */
   canManageMedicalRecords(): boolean {
     const role = this.getRoleFromToken();
-    return role === 'admin' || role === 'veterinarian';
+    return role === 'Admin' || role === 'Veterinarian';
   }
 
   /**
@@ -327,14 +327,16 @@ export class AuthService {
     if (tokens?.access_token) {
       try {
         const tokenInfo = this.decodeToken(tokens.access_token);
-        return tokenInfo.role as UserRole;
+        if (tokenInfo.role) {
+          return tokenInfo.role.charAt(0).toUpperCase() + tokenInfo.role.slice(1) as UserRole;
+        }
       } catch {
         return undefined;
       }
     }
     // Fallback to stored user role
     if (tokens?.user?.role) {
-      return tokens.user.role;
+      return tokens.user.role.charAt(0).toUpperCase() + tokens.user.role.slice(1) as UserRole;
     }
     return undefined;
   }

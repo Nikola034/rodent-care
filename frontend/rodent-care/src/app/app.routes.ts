@@ -48,6 +48,11 @@ export const routes: Routes = [
         path: 'rodents/:id/medical-records',
         loadComponent: () => import('./components/medical/medical-records/medical-records').then(m => m.MedicalRecords)
       },
+      // Profile route
+      {
+        path: 'profile',
+        loadComponent: () => import('./components/profile/profile').then(m => m.Profile)
+      },
       // Admin routes
       {
         path: 'users',

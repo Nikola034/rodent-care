@@ -7,7 +7,7 @@ import {
   Validators,
   AbstractControl,
 } from '@angular/forms';
-import { Router, RouterModule } from '@angular/router';
+import { Router } from '@angular/router';
 import { Subject, takeUntil } from 'rxjs';
 
 // PrimeNG Standalone Imports
@@ -15,12 +15,13 @@ import { CardModule } from 'primeng/card';
 import { ButtonModule } from 'primeng/button';
 import { InputTextModule } from 'primeng/inputtext';
 import { PasswordModule } from 'primeng/password';
-import { DropdownModule } from 'primeng/dropdown';
 import { ToastModule } from 'primeng/toast';
 import { ProgressSpinnerModule } from 'primeng/progressspinner';
+import { TagModule } from 'primeng/tag';
 import { MessageService } from 'primeng/api';
-import { AuthService } from '../../../services/auth/auth-service';
-import { USER_ROLE_OPTIONS, UserRole } from '../../../dto/auth/UserRole';
+
+import { UserService } from '../../services/user/user-service';
+import { UserResponse, UserStatus } from '../../dto/auth';
 
 // Custom Validators
 function passwordMatchValidator(
@@ -36,30 +37,27 @@ function passwordMatchValidator(
 }
 
 @Component({
-  selector: 'app-register',
+  selector: 'app-profile',
   standalone: true,
   imports: [
     CommonModule,
     ReactiveFormsModule,
-    RouterModule,
     CardModule,
     ButtonModule,
     InputTextModule,
     PasswordModule,
-    DropdownModule,
     ToastModule,
     ProgressSpinnerModule,
+    TagModule,
   ],
   providers: [MessageService],
-  templateUrl: 'register.html',
+  templateUrl: 'profile.html',
 })
-export class Register implements OnInit, OnDestroy {
-  registerForm!: FormGroup;
+export class Profile implements OnInit, OnDestroy {
+  profileForm!: FormGroup;
   isLoading = false;
-  currentYear = new Date().getFullYear();
-
-  // Role options (excluding admin - only admins can create admins)
-  roleOptions = USER_ROLE_OPTIONS.filter(r => r.value !== 'Admin');
+  isLoadingUser = true;
+  currentUser: UserResponse | null = null;
 
   private destroy$ = new Subject<void>();
 
@@ -67,13 +65,13 @@ export class Register implements OnInit, OnDestroy {
     private formBuilder: FormBuilder,
     private router: Router,
     private messageService: MessageService,
-    private authService: AuthService
+    private userService: UserService
   ) {
     this.initializeForm();
   }
 
   ngOnInit(): void {
-    this.messageService.clear();
+    this.loadCurrentUser();
   }
 
   ngOnDestroy(): void {
@@ -82,17 +80,8 @@ export class Register implements OnInit, OnDestroy {
   }
 
   private initializeForm(): void {
-    this.registerForm = this.formBuilder.group(
+    this.profileForm = this.formBuilder.group(
       {
-        username: [
-          '',
-          [
-            Validators.required,
-            Validators.minLength(3),
-            Validators.maxLength(50),
-          ],
-        ],
-        email: ['', [Validators.required, Validators.email]],
         password: [
           '',
           [
@@ -101,7 +90,6 @@ export class Register implements OnInit, OnDestroy {
           ],
         ],
         confirmPassword: ['', [Validators.required]],
-        role: ['Volunteer' as UserRole, [Validators.required]],
       },
       {
         validators: passwordMatchValidator,
@@ -109,46 +97,65 @@ export class Register implements OnInit, OnDestroy {
     );
   }
 
+  private loadCurrentUser(): void {
+    this.isLoadingUser = true;
+    this.userService
+      .getCurrentUser()
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (user) => {
+          this.currentUser = user;
+          this.isLoadingUser = false;
+        },
+        error: (error) => {
+          this.isLoadingUser = false;
+          this.messageService.add({
+            severity: 'error',
+            summary: 'Error',
+            detail: 'Failed to load user profile',
+            life: 5000,
+          });
+        },
+      });
+  }
+
   onSubmit(): void {
-    if (this.registerForm.invalid) {
+    if (this.profileForm.invalid) {
       this.markFormGroupTouched();
       this.showValidationErrors();
       return;
     }
 
-    this.performRegistration();
+    this.performUpdate();
   }
 
-  private performRegistration(): void {
+  private performUpdate(): void {
     this.isLoading = true;
     this.messageService.clear();
 
-    const formValue = this.registerForm.value;
-    const registrationData = {
-      username: formValue.username.trim(),
-      email: formValue.email.trim(),
+    const formValue = this.profileForm.value;
+    const updateData = {
       password: formValue.password,
-      role: formValue.role as UserRole,
     };
 
-    this.authService
-      .register(registrationData)
+    this.userService
+      .updateProfile(updateData)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (response) => {
+          this.currentUser = response;
           this.messageService.add({
             severity: 'success',
-            summary: 'Registration Successful!',
-            detail: 'Your account has been created. Please wait for admin approval.',
+            summary: 'Profile Updated!',
+            detail: 'Your password has been changed successfully.',
             life: 5000,
           });
           this.isLoading = false;
-          // Navigate to login after successful registration
-          setTimeout(() => this.router.navigate(['/']), 2000);
+          this.profileForm.reset();
         },
         error: (error) => {
           this.isLoading = false;
-          this.handleRegistrationError(error);
+          this.handleUpdateError(error);
         },
         complete: () => {
           this.isLoading = false;
@@ -156,21 +163,21 @@ export class Register implements OnInit, OnDestroy {
       });
   }
 
-  private handleRegistrationError(error: any): void {
-    let errorMessage = 'Registration failed';
+  private handleUpdateError(error: any): void {
+    let errorMessage = 'Update failed';
     let errorDetail = 'Please try again later.';
 
     if (error.error?.message) {
       errorDetail = error.error.message;
     } else {
       switch (error.status) {
-        case 409:
-          errorMessage = 'Username/Email Already Exists';
-          errorDetail = 'Please choose different credentials.';
-          break;
         case 400:
           errorMessage = 'Invalid Information';
           errorDetail = 'Please check your input and try again.';
+          break;
+        case 401:
+          errorMessage = 'Session Expired';
+          errorDetail = 'Please log in again.';
           break;
       }
     }
@@ -184,14 +191,14 @@ export class Register implements OnInit, OnDestroy {
   }
 
   private markFormGroupTouched(): void {
-    Object.keys(this.registerForm.controls).forEach((key) => {
-      const control = this.registerForm.get(key);
+    Object.keys(this.profileForm.controls).forEach((key) => {
+      const control = this.profileForm.get(key);
       control?.markAsTouched();
     });
   }
 
   private showValidationErrors(): void {
-    const formErrors = this.registerForm.errors || {};
+    const formErrors = this.profileForm.errors || {};
 
     if (formErrors['passwordMismatch']) {
       this.messageService.add({
@@ -203,38 +210,32 @@ export class Register implements OnInit, OnDestroy {
     }
   }
 
-  navigateToLogin(): void {
-    this.router.navigate(['/']);
+  goBack(): void {
+    this.router.navigate(['/app']);
+  }
+
+  getStatusSeverity(status: UserStatus): 'success' | 'info' | 'warn' | 'danger' | 'secondary' | 'contrast' {
+    switch (status) {
+      case 'Active':
+        return 'success';
+      case 'Pending':
+        return 'warn';
+      case 'Inactive':
+        return 'danger';
+      default:
+        return 'info';
+    }
   }
 
   // Getters for template
-  get usernameControl() {
-    return this.registerForm.get('username');
-  }
-  get emailControl() {
-    return this.registerForm.get('email');
-  }
   get passwordControl() {
-    return this.registerForm.get('password');
+    return this.profileForm.get('password');
   }
   get confirmPasswordControl() {
-    return this.registerForm.get('confirmPassword');
-  }
-  get roleControl() {
-    return this.registerForm.get('role');
+    return this.profileForm.get('confirmPassword');
   }
 
   // Validation state getters
-  get isUsernameInvalid(): boolean {
-    const control = this.usernameControl;
-    return !!(control && control.invalid && (control.dirty || control.touched));
-  }
-
-  get isEmailInvalid(): boolean {
-    const control = this.emailControl;
-    return !!(control && control.invalid && (control.dirty || control.touched));
-  }
-
   get isPasswordInvalid(): boolean {
     const control = this.passwordControl;
     return !!(control && control.invalid && (control.dirty || control.touched));
@@ -244,28 +245,11 @@ export class Register implements OnInit, OnDestroy {
     const control = this.confirmPasswordControl;
     return (
       !!(control && control.invalid && (control.dirty || control.touched)) ||
-      this.registerForm.errors?.['passwordMismatch']
+      this.profileForm.errors?.['passwordMismatch']
     );
   }
 
   // Error message getters
-  get usernameErrorMessage(): string {
-    const control = this.usernameControl;
-    if (control?.errors?.['required']) return 'Username is required';
-    if (control?.errors?.['minlength'])
-      return 'Username must be at least 3 characters';
-    if (control?.errors?.['maxlength'])
-      return 'Username must be at most 50 characters';
-    return '';
-  }
-
-  get emailErrorMessage(): string {
-    const control = this.emailControl;
-    if (control?.errors?.['required']) return 'Email is required';
-    if (control?.errors?.['email']) return 'Please enter a valid email address';
-    return '';
-  }
-
   get passwordErrorMessage(): string {
     const control = this.passwordControl;
     if (control?.errors?.['required']) return 'Password is required';
@@ -277,7 +261,7 @@ export class Register implements OnInit, OnDestroy {
   get confirmPasswordErrorMessage(): string {
     const control = this.confirmPasswordControl;
     if (control?.errors?.['required']) return 'Please confirm your password';
-    if (this.registerForm.errors?.['passwordMismatch'])
+    if (this.profileForm.errors?.['passwordMismatch'])
       return 'Passwords do not match';
     return '';
   }

@@ -101,6 +101,12 @@ pub struct UpdateUserStatusRequest {
     pub status: UserStatus,
 }
 
+#[derive(Debug, Deserialize, Validate)]
+pub struct UpdateProfileRequest {
+    #[validate(length(min = 6, message = "Password must be at least 6 characters"))]
+    pub password: Option<String>,
+}
+
 #[derive(Debug, Deserialize)]
 pub struct ValidateTokenRequest {
     pub token: String,

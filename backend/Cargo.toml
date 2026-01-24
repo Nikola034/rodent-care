@@ -3,6 +3,7 @@ members = [
     "user-service",
     "api-gateway",
     "rodent-registry-service",
+    "activity-tracking-service",
 ]
 
 resolver = "2"

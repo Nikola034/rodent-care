@@ -16,7 +16,7 @@ pub fn create_routes() -> Router<Arc<AppState>> {
         .route("/health", get(handlers::health_check))
         // Protected routes (authentication handled by API Gateway, validated internally)
         .route("/auth/logout", post(handlers::logout))
-        .route("/users/me", get(handlers::get_current_user))
+        .route("/users/me", get(handlers::get_current_user).put(handlers::update_profile))
         // Admin routes (role checked in handlers)
         .route("/users", get(handlers::list_users))
         .route("/users/:id", get(handlers::get_user))

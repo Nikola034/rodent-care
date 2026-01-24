@@ -16,22 +16,27 @@
   <!-- Filters -->
   <p-card styleClass="mb-4">
     <div class="grid">
-      <div class="col-12 md:col-3">
+      <div class="col-12 md:col-2">
         <span class="p-input-icon-left w-full">
-          <i class="pi pi-search"></i>
           <input pInputText type="text" [(ngModel)]="searchName" placeholder="Search by name..."
             (ngModelChange)="onSearchChange()" class="w-full" />
         </span>
       </div>
-      <div class="col-12 md:col-3">
+      <div class="col-12 md:col-2">
+        <span class="p-input-icon-left w-full">
+          <input pInputText type="text" [(ngModel)]="searchChipId" placeholder="Search by chip ID..."
+            (ngModelChange)="onSearchChipIdChange()" class="w-full" />
+        </span>
+      </div>
+      <div class="col-12 md:col-2">
         <p-dropdown [options]="speciesOptions" [(ngModel)]="selectedSpecies" placeholder="Filter by Species"
           (onChange)="onFilterChange()" styleClass="w-full"></p-dropdown>
       </div>
-      <div class="col-12 md:col-3">
+      <div class="col-12 md:col-2">
         <p-dropdown [options]="statusOptions" [(ngModel)]="selectedStatus" placeholder="Filter by Status"
           (onChange)="onFilterChange()" styleClass="w-full"></p-dropdown>
       </div>
-      <div class="col-12 md:col-3">
+      <div class="col-12 md:col-2">
         <p-dropdown [options]="sortOptions" [(ngModel)]="selectedSort" placeholder="Sort by"
           (onChange)="onFilterChange()" styleClass="w-full"></p-dropdown>
       </div>

@@ -5,6 +5,7 @@ import { environment } from '../../../environments/environment';
 import {
   ActivityLogsResponse,
   MessageResponse,
+  UpdateProfileRequest,
   UpdateUserRoleRequest,
   UpdateUserStatusRequest,
   UserResponse,
@@ -98,6 +99,18 @@ export class UserService {
     return this.http.get<ActivityLogsResponse>(`${this.baseUrl}/${id}/activity-logs`).pipe(
       catchError((error) => {
         console.error('Failed to get activity logs:', error);
+        return throwError(() => error);
+      })
+    );
+  }
+
+  /**
+   * Update current user's profile
+   */
+  updateProfile(request: UpdateProfileRequest): Observable<UserResponse> {
+    return this.http.put<UserResponse>(`${this.baseUrl}/me`, request).pipe(
+      catchError((error) => {
+        console.error('Failed to update profile:', error);
         return throwError(() => error);
       })
     );

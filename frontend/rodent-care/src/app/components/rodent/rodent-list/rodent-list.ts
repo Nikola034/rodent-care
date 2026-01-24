@@ -61,6 +61,7 @@ export class RodentList implements OnInit, OnDestroy {
 
   // Filters
   searchName = '';
+  searchChipId = '';
   selectedSpecies: Species | null = null;
   selectedStatus: RodentStatus | null = null;
   sortField = 'created_at';
@@ -132,6 +133,9 @@ export class RodentList implements OnInit, OnDestroy {
     if (this.selectedStatus) {
       params.status = this.selectedStatus;
     }
+    if (this.searchChipId) {
+      params.chip_id = this.searchChipId;
+    }
 
     this.rodentService.listRodents(params)
       .pipe(takeUntil(this.destroy$))
@@ -155,6 +159,10 @@ export class RodentList implements OnInit, OnDestroy {
 
   onSearchChange(): void {
     this.searchSubject.next(this.searchName);
+  }
+
+  onSearchChipIdChange(): void {
+    this.searchSubject.next(this.searchChipId);
   }
 
   onFilterChange(): void {

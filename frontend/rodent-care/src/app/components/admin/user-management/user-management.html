@@ -77,7 +77,7 @@
 </div>
 
 <!-- Role Change Dialog -->
-<p-dialog header="Change User Role" [(visible)]="showRoleDialog" [modal]="true" [style]="{width: '400px'}">
+<p-dialog header="Change User Role" [(visible)]="showRoleDialog" [modal]="true" [style]="{width: '400px', height: '400px'}">
   @if (selectedUser) {
     <div class="flex flex-column gap-3">
       <p class="m-0">Change role for <strong>{{ selectedUser.username }}</strong></p>
@@ -96,7 +96,7 @@
 </p-dialog>
 
 <!-- Status Change Dialog -->
-<p-dialog header="Change User Status" [(visible)]="showStatusDialog" [modal]="true" [style]="{width: '400px'}">
+<p-dialog header="Change User Status" [(visible)]="showStatusDialog" [modal]="true" [style]="{width: '400px', height: '380px'}">
   @if (selectedUser) {
     <div class="flex flex-column gap-3">
       <p class="m-0">Change status for <strong>{{ selectedUser.username }}</strong></p>

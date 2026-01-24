@@ -8,4 +8,5 @@ export * from './UserStatus';
 export * from './UserResponse';
 export * from './UpdateUserRoleRequest';
 export * from './UpdateUserStatusRequest';
+export * from './UpdateProfileRequest';
 export * from './ActivityLog';

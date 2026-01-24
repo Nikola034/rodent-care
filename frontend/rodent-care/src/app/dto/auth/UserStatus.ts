@@ -1,16 +1,16 @@
-export type UserStatus = 'pending' | 'active' | 'inactive';
+export type UserStatus = 'Pending' | 'Active' | 'Inactive';
 
 export const USER_STATUS_OPTIONS: { label: string; value: UserStatus }[] = [
-  { label: 'Pending', value: 'pending' },
-  { label: 'Active', value: 'active' },
-  { label: 'Inactive', value: 'inactive' }
+  { label: 'Pending', value: 'Pending' },
+  { label: 'Active', value: 'Active' },
+  { label: 'Inactive', value: 'Inactive' }
 ];
 
 export const getStatusSeverity = (status: UserStatus): string => {
   switch (status) {
-    case 'active': return 'success';
-    case 'pending': return 'warn';
-    case 'inactive': return 'danger';
+    case 'Active': return 'success';
+    case 'Pending': return 'warn';
+    case 'Inactive': return 'danger';
     default: return 'info';
   }
 };
