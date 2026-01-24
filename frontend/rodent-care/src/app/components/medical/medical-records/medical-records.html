@@ -1,0 +1,221 @@
+<p-toast position="top-right"></p-toast>
+<p-confirmDialog></p-confirmDialog>
+
+<div class="medical-records">
+  <!-- Header -->
+  <div class="flex align-items-center justify-content-between mb-4">
+    <div class="flex align-items-center gap-3">
+      <p-button icon="pi pi-arrow-left" [rounded]="true" [text]="true" (onClick)="navigateBack()"></p-button>
+      <div>
+        <h1 class="text-2xl font-bold text-color m-0">Medical Records</h1>
+        @if (rodent) {
+          <p class="text-color-secondary mt-1 mb-0">for {{ rodent.name }}</p>
+        }
+      </div>
+    </div>
+    @if (canManageMedicalRecords()) {
+      <p-button label="Add Record" icon="pi pi-plus" (onClick)="openNewRecordDialog()"></p-button>
+    }
+  </div>
+
+  @if (isLoading) {
+    <div class="flex justify-content-center py-6">
+      <p-progressSpinner></p-progressSpinner>
+    </div>
+  } @else {
+    @if (medicalRecords.length > 0) {
+      <div class="flex flex-column gap-3">
+        @for (record of medicalRecords; track record.id) {
+          <p-card>
+            <div class="flex align-items-start justify-content-between">
+              <div class="flex-1">
+                <div class="flex align-items-center gap-2 mb-2">
+                  <p-tag [value]="getRecordTypeLabel(record.record_type)"
+                    [severity]="getRecordTypeSeverity(record.record_type)"></p-tag>
+                  <span class="text-color-secondary">{{ record.date | date:'mediumDate' }}</span>
+                </div>
+
+                <p class="font-semibold mb-2">{{ record.description }}</p>
+
+                @if (record.diagnosis) {
+                  <div class="mb-2">
+                    <span class="text-color-secondary text-sm">Diagnosis:</span>
+                    <p class="m-0 mt-1">{{ record.diagnosis }}</p>
+                  </div>
+                }
+
+                @if (record.medications.length > 0) {
+                  <div class="mb-2">
+                    <span class="text-color-secondary text-sm">Medications:</span>
+                    <ul class="list-none p-0 m-0 mt-1">
+                      @for (med of record.medications; track med.name) {
+                        <li class="mb-1">
+                          <span class="font-semibold">{{ med.name }}</span>
+                          - {{ med.dosage }}, {{ med.frequency }}
+                          @if (med.duration) {
+                            <span class="text-color-secondary">({{ med.duration }})</span>
+                          }
+                        </li>
+                      }
+                    </ul>
+                  </div>
+                }
+
+                @if (record.test_results) {
+                  <div class="mb-2">
+                    <span class="text-color-secondary text-sm">Test Results:</span>
+                    <p class="m-0 mt-1">{{ record.test_results }}</p>
+                  </div>
+                }
+
+                @if (record.next_appointment) {
+                  <div class="flex align-items-center gap-2 mt-3 p-2 surface-ground border-round">
+                    <i class="pi pi-calendar text-primary"></i>
+                    <span>Next appointment: {{ record.next_appointment | date:'medium' }}</span>
+                  </div>
+                }
+
+                <p class="text-xs text-color-secondary mt-3 mb-0">
+                  Recorded by {{ record.veterinarian_name }} on {{ record.created_at | date:'medium' }}
+                </p>
+              </div>
+
+              @if (canManageMedicalRecords()) {
+                <div class="flex gap-1">
+                  <p-button icon="pi pi-pencil" [rounded]="true" [text]="true"
+                    (onClick)="openEditRecordDialog(record)" pTooltip="Edit"></p-button>
+                  <p-button icon="pi pi-trash" [rounded]="true" [text]="true" severity="danger"
+                    (onClick)="confirmDeleteRecord(record)" pTooltip="Delete"></p-button>
+                </div>
+              }
+            </div>
+          </p-card>
+        }
+      </div>
+    } @else {
+      <p-card>
+        <div class="text-center py-6">
+          <i class="pi pi-file-edit text-5xl text-color-secondary mb-3"></i>
+          <p class="text-xl text-color-secondary mb-3">No medical records found</p>
+          @if (canManageMedicalRecords()) {
+            <p-button label="Add First Record" icon="pi pi-plus" (onClick)="openNewRecordDialog()"></p-button>
+          }
+        </div>
+      </p-card>
+    }
+  }
+</div>
+
+<!-- Record Dialog -->
+<p-dialog [header]="isEditMode ? 'Edit Medical Record' : 'New Medical Record'"
+  [(visible)]="showRecordDialog" [modal]="true" [style]="{width: '700px'}" [closable]="!isSaving">
+  <form [formGroup]="recordForm">
+    <div class="grid">
+      <!-- Record Type -->
+      <div class="col-12 md:col-6">
+        <div class="field">
+          <label for="record_type" class="font-semibold">Record Type *</label>
+          <p-dropdown id="record_type" formControlName="record_type" [options]="recordTypeOptions"
+            placeholder="Select type" styleClass="w-full"
+            [class.p-invalid]="isFieldInvalid('record_type')"></p-dropdown>
+        </div>
+      </div>
+
+      <!-- Date -->
+      <div class="col-12 md:col-6">
+        <div class="field">
+          <label for="date" class="font-semibold">Date</label>
+          <p-calendar id="date" formControlName="date" dateFormat="yy-mm-dd" [showIcon]="true"
+            [maxDate]="maxDate" styleClass="w-full"></p-calendar>
+        </div>
+      </div>
+
+      <!-- Description -->
+      <div class="col-12">
+        <div class="field">
+          <label for="description" class="font-semibold">Description *</label>
+          <textarea pInputTextarea id="description" formControlName="description" rows="3"
+            class="w-full" [class.p-invalid]="isFieldInvalid('description')"
+            placeholder="Describe the medical visit..."></textarea>
+        </div>
+      </div>
+
+      <!-- Diagnosis -->
+      <div class="col-12">
+        <div class="field">
+          <label for="diagnosis" class="font-semibold">Diagnosis</label>
+          <textarea pInputTextarea id="diagnosis" formControlName="diagnosis" rows="2"
+            class="w-full" placeholder="Enter diagnosis if applicable..."></textarea>
+        </div>
+      </div>
+
+      <!-- Medications -->
+      <div class="col-12">
+        <div class="flex align-items-center justify-content-between mb-2">
+          <label class="font-semibold">Medications</label>
+          <p-button label="Add Medication" icon="pi pi-plus" size="small" [text]="true"
+            (onClick)="addMedication()"></p-button>
+        </div>
+
+        @if (medications.length > 0) {
+          <div formArrayName="medications" class="flex flex-column gap-2">
+            @for (med of medications.controls; track $index; let i = $index) {
+              <div [formGroupName]="i" class="surface-ground p-3 border-round">
+                <div class="flex align-items-center justify-content-between mb-2">
+                  <span class="font-semibold text-sm">Medication {{ i + 1 }}</span>
+                  <p-button icon="pi pi-times" [rounded]="true" [text]="true" size="small"
+                    severity="danger" (onClick)="removeMedication(i)"></p-button>
+                </div>
+                <div class="grid">
+                  <div class="col-12 md:col-6">
+                    <input pInputText formControlName="name" placeholder="Medication name *" class="w-full" />
+                  </div>
+                  <div class="col-12 md:col-6">
+                    <input pInputText formControlName="dosage" placeholder="Dosage *" class="w-full" />
+                  </div>
+                  <div class="col-12 md:col-6">
+                    <input pInputText formControlName="frequency" placeholder="Frequency *" class="w-full" />
+                  </div>
+                  <div class="col-12 md:col-6">
+                    <input pInputText formControlName="duration" placeholder="Duration" class="w-full" />
+                  </div>
+                  <div class="col-12">
+                    <input pInputText formControlName="notes" placeholder="Notes" class="w-full" />
+                  </div>
+                </div>
+              </div>
+            }
+          </div>
+        } @else {
+          <p class="text-color-secondary text-sm m-0">No medications added</p>
+        }
+      </div>
+
+      <!-- Test Results -->
+      <div class="col-12">
+        <div class="field">
+          <label for="test_results" class="font-semibold">Test Results</label>
+          <textarea pInputTextarea id="test_results" formControlName="test_results" rows="2"
+            class="w-full" placeholder="Enter any test results..."></textarea>
+        </div>
+      </div>
+
+      <!-- Next Appointment -->
+      <div class="col-12 md:col-6">
+        <div class="field">
+          <label for="next_appointment" class="font-semibold">Next Appointment</label>
+          <p-calendar id="next_appointment" formControlName="next_appointment" dateFormat="yy-mm-dd"
+            [showIcon]="true" [showTime]="true" styleClass="w-full"
+            placeholder="Schedule follow-up"></p-calendar>
+        </div>
+      </div>
+    </div>
+  </form>
+
+  <ng-template pTemplate="footer">
+    <p-button label="Cancel" [text]="true" (onClick)="showRecordDialog = false"
+      [disabled]="isSaving"></p-button>
+    <p-button [label]="isEditMode ? 'Save Changes' : 'Create Record'" icon="pi pi-check"
+      (onClick)="saveRecord()" [loading]="isSaving"></p-button>
+  </ng-template>
+</p-dialog>

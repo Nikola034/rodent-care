@@ -1,0 +1,177 @@
+<p-toast position="top-right"></p-toast>
+
+<div class="dashboard">
+  <!-- Welcome Header -->
+  <div class="mb-4">
+    <h1 class="text-3xl font-bold text-color m-0">Welcome back, {{ username }}!</h1>
+    <p class="text-color-secondary mt-2 mb-0">Here's an overview of your rodent care center.</p>
+  </div>
+
+  <!-- Stats Cards -->
+  <div class="grid">
+    <!-- Total Rodents -->
+    <div class="col-12 md:col-6 lg:col-3">
+      <p-card styleClass="h-full">
+        <div class="flex align-items-center justify-content-between">
+          <div>
+            <span class="block text-color-secondary font-medium mb-2">Total Rodents</span>
+            @if (isLoading) {
+              <p-skeleton width="4rem" height="2rem"></p-skeleton>
+            } @else {
+              <span class="text-3xl font-bold text-primary">{{ stats.totalRodents }}</span>
+            }
+          </div>
+          <div class="flex align-items-center justify-content-center bg-primary-100 border-round p-3">
+            <i class="pi pi-heart-fill text-primary text-2xl"></i>
+          </div>
+        </div>
+      </p-card>
+    </div>
+
+    <!-- Active Rodents -->
+    <div class="col-12 md:col-6 lg:col-3">
+      <p-card styleClass="h-full">
+        <div class="flex align-items-center justify-content-between">
+          <div>
+            <span class="block text-color-secondary font-medium mb-2">Active</span>
+            @if (isLoading) {
+              <p-skeleton width="4rem" height="2rem"></p-skeleton>
+            } @else {
+              <span class="text-3xl font-bold text-green-500">{{ stats.activeRodents }}</span>
+            }
+          </div>
+          <div class="flex align-items-center justify-content-center bg-green-100 border-round p-3">
+            <i class="pi pi-check-circle text-green-500 text-2xl"></i>
+          </div>
+        </div>
+      </p-card>
+    </div>
+
+    <!-- Medical Care -->
+    <div class="col-12 md:col-6 lg:col-3">
+      <p-card styleClass="h-full">
+        <div class="flex align-items-center justify-content-between">
+          <div>
+            <span class="block text-color-secondary font-medium mb-2">Medical Care</span>
+            @if (isLoading) {
+              <p-skeleton width="4rem" height="2rem"></p-skeleton>
+            } @else {
+              <span class="text-3xl font-bold text-red-500">{{ stats.inMedicalCare }}</span>
+            }
+          </div>
+          <div class="flex align-items-center justify-content-center bg-red-100 border-round p-3">
+            <i class="pi pi-heart text-red-500 text-2xl"></i>
+          </div>
+        </div>
+      </p-card>
+    </div>
+
+    <!-- Quarantine -->
+    <div class="col-12 md:col-6 lg:col-3">
+      <p-card styleClass="h-full">
+        <div class="flex align-items-center justify-content-between">
+          <div>
+            <span class="block text-color-secondary font-medium mb-2">Quarantine</span>
+            @if (isLoading) {
+              <p-skeleton width="4rem" height="2rem"></p-skeleton>
+            } @else {
+              <span class="text-3xl font-bold text-orange-500">{{ stats.inQuarantine }}</span>
+            }
+          </div>
+          <div class="flex align-items-center justify-content-center bg-orange-100 border-round p-3">
+            <i class="pi pi-exclamation-triangle text-orange-500 text-2xl"></i>
+          </div>
+        </div>
+      </p-card>
+    </div>
+  </div>
+
+  <!-- Charts and Recent Activity -->
+  <div class="grid mt-4">
+    <!-- Status Distribution Chart -->
+    <div class="col-12 lg:col-6">
+      <p-card header="Rodent Status Distribution" styleClass="h-full">
+        <div class="flex justify-content-center" style="height: 300px;">
+          @if (isLoading) {
+            <p-skeleton width="100%" height="100%"></p-skeleton>
+          } @else {
+            <p-chart type="doughnut" [data]="statusChartData" [options]="statusChartOptions"
+              styleClass="w-full h-full"></p-chart>
+          }
+        </div>
+      </p-card>
+    </div>
+
+    <!-- Recent Rodents -->
+    <div class="col-12 lg:col-6">
+      <p-card styleClass="h-full">
+        <ng-template pTemplate="header">
+          <div class="flex align-items-center justify-content-between p-3 pb-0">
+            <h3 class="m-0">Recent Rodents</h3>
+            <p-button label="View All" icon="pi pi-arrow-right" [text]="true" (onClick)="navigateToRodents()"></p-button>
+          </div>
+        </ng-template>
+
+        @if (isLoading) {
+          <div class="flex flex-column gap-3">
+            @for (i of [1, 2, 3, 4, 5]; track i) {
+              <div class="flex align-items-center gap-3">
+                <p-skeleton shape="circle" size="3rem"></p-skeleton>
+                <div class="flex-1">
+                  <p-skeleton width="60%" height="1rem" styleClass="mb-2"></p-skeleton>
+                  <p-skeleton width="40%" height="0.75rem"></p-skeleton>
+                </div>
+              </div>
+            }
+          </div>
+        } @else {
+          <p-table [value]="recentRodents" [tableStyle]="{ 'min-width': '100%' }" styleClass="p-datatable-sm">
+            <ng-template pTemplate="body" let-rodent>
+              <tr class="cursor-pointer hover:surface-hover" (click)="navigateToRodent(rodent.id)">
+                <td>
+                  <div class="flex align-items-center gap-3">
+                    <div class="flex align-items-center justify-content-center bg-primary-100 border-round-xl p-2"
+                      style="width: 40px; height: 40px;">
+                      <i class="pi pi-heart-fill text-primary"></i>
+                    </div>
+                    <div>
+                      <span class="font-semibold">{{ rodent.name }}</span>
+                      <span class="block text-sm text-color-secondary">{{ rodent.species }}</span>
+                    </div>
+                  </div>
+                </td>
+                <td class="text-right">
+                  <p-tag [value]="getStatusLabel(rodent.status)" [severity]="getStatusSeverity(rodent.status)"></p-tag>
+                </td>
+              </tr>
+            </ng-template>
+            <ng-template pTemplate="emptymessage">
+              <tr>
+                <td colspan="2" class="text-center py-4">
+                  <i class="pi pi-inbox text-4xl text-color-secondary mb-2"></i>
+                  <p class="text-color-secondary">No rodents found</p>
+                  @if (canManageRodents()) {
+                    <p-button label="Add First Rodent" icon="pi pi-plus" (onClick)="navigateToAddRodent()"></p-button>
+                  }
+                </td>
+              </tr>
+            </ng-template>
+          </p-table>
+        }
+      </p-card>
+    </div>
+  </div>
+
+  <!-- Quick Actions -->
+  @if (canManageRodents()) {
+    <div class="mt-4">
+      <p-card header="Quick Actions">
+        <div class="flex flex-wrap gap-3">
+          <p-button label="Add New Rodent" icon="pi pi-plus" (onClick)="navigateToAddRodent()"></p-button>
+          <p-button label="View All Rodents" icon="pi pi-list" [outlined]="true"
+            (onClick)="navigateToRodents()"></p-button>
+        </div>
+      </p-card>
+    </div>
+  }
+</div>

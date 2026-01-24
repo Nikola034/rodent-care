@@ -1,0 +1,67 @@
+<p-toast position="top-center"></p-toast>
+
+<div class="flex align-items-center justify-content-center min-h-screen px-3"
+    >
+
+    <div>
+        <!-- Brand Section -->
+        <div class="text-center mb-4">
+            <i class="pi pi-heart-fill text-6xl mb-3 block text-primary"></i>
+            <h1 class="text-4xl font-bold m-0 mb-2">Rodent Care</h1>
+            <p class="text-lg m-0">Sign in to your account</p>
+        </div>
+
+        <!-- Login Card -->
+        <p-card class="border-none shadow-4">
+            <ng-template pTemplate="content">
+                <div class="flex justify-content-center w-full">
+                    <form [formGroup]="loginForm" (ngSubmit)="onSubmit()" class="p-fluid">
+
+                        <!-- Username Field -->
+                        <div class="field mb-4">
+                            <label for="username" class="block font-semibold mb-2">
+                                <i class="pi pi-user mr-2"></i>Username
+                            </label>
+                            <span class="p-input-icon-left w-full">
+                                <input pInputText id="username" formControlName="username"
+                                    placeholder="Enter your username" class="w-full"
+                                    [class.p-invalid]="isUsernameInvalid" [disabled]="isLoading" />
+                            </span>
+                            <small class="p-error block mt-1" *ngIf="isUsernameInvalid">
+                                {{ usernameErrorMessage }}
+                            </small>
+                        </div>
+
+                        <!-- Password Field -->
+                        <div class="field mb-4">
+                            <label for="password" class="block font-semibold mb-2">
+                                <i class="pi pi-lock mr-2"></i>Password
+                            </label>
+                            <p-password formControlName="password" inputId="password" placeholder="Enter your password"
+                                class="w-full" inputStyleClass="w-full" [class.p-invalid]="isPasswordInvalid"
+                                [disabled]="isLoading" [feedback]="false" [toggleMask]="true"></p-password>
+                            <small class="p-error block mt-1" *ngIf="isPasswordInvalid">
+                                {{ passwordErrorMessage }}
+                            </small>
+                        </div>
+
+
+
+                        <!-- Login Button -->
+                        <p-button type="submit" label="Sign In" icon="pi pi-sign-in" class="w-full flex justify-content-center mb-4"
+                            [loading]="isLoading" [disabled]="loginForm.invalid || isLoading"></p-button>
+
+                        <!-- Register Link -->
+                        <div class="text-center pt-3" >
+                            <span class="text-color-secondary mr-2 flex w-full justify-content-center">Don't have an account?</span>
+                            <p-button label="Create Account" link class="p-0 flex w-full justify-content-center" (onClick)="navigateToRegister()"
+                                [disabled]="isLoading"></p-button>
+                        </div>
+
+                    </form>
+                </div>
+            </ng-template>
+        </p-card>
+
+    </div>
+</div>

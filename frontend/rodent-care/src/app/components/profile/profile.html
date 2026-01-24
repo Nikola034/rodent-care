@@ -1,0 +1,190 @@
+<p-toast position="top-center"></p-toast>
+
+<div class="p-4">
+  <!-- Header -->
+  <div class="flex align-items-center justify-content-between mb-4">
+    <div class="flex align-items-center gap-3">
+      <p-button
+        icon="pi pi-arrow-left"
+        [rounded]="true"
+        [text]="true"
+        severity="secondary"
+        (onClick)="goBack()"
+      ></p-button>
+      <div>
+        <h1 class="text-3xl font-bold m-0">Edit Profile</h1>
+        <p class="text-color-secondary m-0 mt-1">Update your account settings</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Loading State -->
+  <div *ngIf="isLoadingUser" class="flex justify-content-center p-6">
+    <p-progressSpinner></p-progressSpinner>
+  </div>
+
+  <!-- Profile Card -->
+  <div *ngIf="!isLoadingUser && currentUser" class="grid">
+    <!-- User Info Section (Read-only) -->
+    <div class="col-12 lg:col-6">
+      <p-card styleClass="h-full">
+        <ng-template pTemplate="header">
+          <div class="p-3 pb-0">
+            <h2 class="text-xl font-semibold m-0">
+              <i class="pi pi-user mr-2"></i>Account Information
+            </h2>
+            <p class="text-color-secondary text-sm m-0 mt-1">
+              These fields cannot be changed
+            </p>
+          </div>
+        </ng-template>
+        <ng-template pTemplate="content">
+          <!-- Username (Read-only) -->
+          <div class="field mb-4">
+            <label class="block font-semibold mb-2">
+              <i class="pi pi-user mr-2"></i>Username
+            </label>
+            <input
+              pInputText
+              [value]="currentUser.username"
+              class="w-full"
+              [disabled]="true"
+            />
+            <small class="text-color-secondary text-sm mt-1 block">
+              Username cannot be changed
+            </small>
+          </div>
+
+          <!-- Email (Read-only) -->
+          <div class="field mb-4">
+            <label class="block font-semibold mb-2">
+              <i class="pi pi-envelope mr-2"></i>Email Address
+            </label>
+            <input
+              pInputText
+              [value]="currentUser.email"
+              class="w-full"
+              [disabled]="true"
+            />
+            <small class="text-color-secondary text-sm mt-1 block">
+              Email cannot be changed
+            </small>
+          </div>
+
+          <!-- Role (Read-only) -->
+          <div class="field mb-4">
+            <label class="block font-semibold mb-2">
+              <i class="pi pi-id-card mr-2"></i>Role
+            </label>
+            <input
+              pInputText
+              [value]="currentUser.role"
+              class="w-full"
+              [disabled]="true"
+            />
+            <small class="text-color-secondary text-sm mt-1 block">
+              Role can only be changed by an administrator
+            </small>
+          </div>
+
+          <!-- Status (Read-only) -->
+          <div class="field">
+            <label class="block font-semibold mb-2">
+              <i class="pi pi-check-circle mr-2"></i>Account Status
+            </label>
+            <p-tag
+              [value]="currentUser.status"
+              [severity]="getStatusSeverity(currentUser.status)"
+            ></p-tag>
+          </div>
+        </ng-template>
+      </p-card>
+    </div>
+
+    <!-- Change Password Section -->
+    <div class="col-12 lg:col-6">
+      <p-card styleClass="h-full">
+        <ng-template pTemplate="header">
+          <div class="p-3 pb-0">
+            <h2 class="text-xl font-semibold m-0">
+              <i class="pi pi-lock mr-2"></i>Change Password
+            </h2>
+            <p class="text-color-secondary text-sm m-0 mt-1">
+              Update your account password
+            </p>
+          </div>
+        </ng-template>
+        <ng-template pTemplate="content">
+          <form [formGroup]="profileForm" (ngSubmit)="onSubmit()" class="p-fluid">
+            <!-- New Password -->
+            <div class="field mb-4">
+              <label for="password" class="block font-semibold mb-2">
+                <i class="pi pi-lock mr-2"></i>New Password *
+              </label>
+              <p-password
+                formControlName="password"
+                inputId="password"
+                placeholder="Enter new password"
+                styleClass="w-full"
+                inputStyleClass="w-full"
+                [class.p-invalid]="isPasswordInvalid"
+                [disabled]="isLoading"
+                [feedback]="true"
+                [toggleMask]="true"
+              ></p-password>
+              <small class="p-error block mt-1" *ngIf="isPasswordInvalid">
+                {{ passwordErrorMessage }}
+              </small>
+              <small class="text-color-secondary text-sm mt-1 block">
+                Password must be at least 6 characters
+              </small>
+            </div>
+
+            <!-- Confirm Password -->
+            <div class="field mb-4">
+              <label for="confirmPassword" class="block font-semibold mb-2">
+                <i class="pi pi-lock mr-2"></i>Confirm New Password *
+              </label>
+              <p-password
+                formControlName="confirmPassword"
+                inputId="confirmPassword"
+                placeholder="Confirm new password"
+                styleClass="w-full"
+                inputStyleClass="w-full"
+                [class.p-invalid]="isConfirmPasswordInvalid"
+                [disabled]="isLoading"
+                [feedback]="false"
+                [toggleMask]="true"
+              ></p-password>
+              <small class="p-error block mt-1" *ngIf="isConfirmPasswordInvalid">
+                {{ confirmPasswordErrorMessage }}
+              </small>
+            </div>
+
+            <!-- Submit Button -->
+            <p-button
+              type="submit"
+              label="Update Password"
+              icon="pi pi-check"
+              styleClass="w-full"
+              [loading]="isLoading"
+              [disabled]="isLoading || profileForm.invalid"
+            ></p-button>
+          </form>
+        </ng-template>
+      </p-card>
+    </div>
+  </div>
+
+  <!-- Account Created Info -->
+  <div *ngIf="!isLoadingUser && currentUser" class="mt-4">
+    <p-card>
+      <ng-template pTemplate="content">
+        <div class="flex align-items-center gap-2 text-color-secondary">
+          <i class="pi pi-calendar"></i>
+          <span>Account created on {{ currentUser.created_at | date:'medium' }}</span>
+        </div>
+      </ng-template>
+    </p-card>
+  </div>
+</div>

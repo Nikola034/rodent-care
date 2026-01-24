@@ -1,0 +1,73 @@
+/* PrimeNG v19 Themes and Styles */
+@import "primeicons/primeicons.css";
+@import "primeflex/primeflex.css";
+
+/* Global Styles */
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  font-family: var(--font-family);
+  background-color: var(--surface-ground);
+  color: var(--text-color);
+}
+
+/* Layout styles */
+.layout-wrapper {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.layout-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+}
+
+.layout-main {
+  flex: 1;
+  background-color: var(--surface-ground);
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--surface-100);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--surface-400);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--surface-500);
+}
+
+/* Utility classes */
+.cursor-pointer {
+  cursor: pointer;
+}
+
+.capitalize {
+  text-transform: capitalize;
+}
+
+/* Fix for PrimeNG components */
+.p-card .p-card-content {
+  padding-top: 0;
+}
+
+.p-datatable .p-datatable-tbody > tr:hover {
+  background-color: var(--surface-hover);
+}
+
+/* Toast positioning fix */
+.p-toast {
+  z-index: 10000;
+}

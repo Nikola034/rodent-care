@@ -4,7 +4,11 @@
       "Bash(xargs cat:*)",
       "Bash(tree:*)",
       "Bash(cargo check:*)",
-      "Bash(cargo build:*)"
+      "Bash(cargo build:*)",
+      "Bash(dir:*)",
+      "Bash(npm run build:*)",
+      "Bash(npm install:*)",
+      "Bash(npm view:*)"
     ]
   }
 }

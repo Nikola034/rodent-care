@@ -594,6 +594,64 @@ pub async fn get_user_activity_logs(
     }))
 }
 
+// PUT /api/users/me - Update current user's profile
+pub async fn update_profile(
+    State(state): State<Arc<AppState>>,
+    headers: axum::http::HeaderMap,
+    Json(payload): Json<UpdateProfileRequest>,
+) -> Result<Json<UserResponse>, AppError> {
+    // Validate input
+    payload.validate().map_err(|e| AppError::ValidationError(e.to_string()))?;
+
+    let claims = extract_claims_from_header(&state, &headers).await?;
+    let user_id = Uuid::parse_str(&claims.sub).map_err(|_| AppError::InvalidToken)?;
+
+    // Check if there's anything to update
+    if payload.password.is_none() {
+        return Err(AppError::ValidationError(
+            "No fields to update provided".to_string(),
+        ));
+    }
+
+    // Update password if provided
+    if let Some(ref password) = payload.password {
+        let password_hash = bcrypt::hash(password, bcrypt::DEFAULT_COST)
+            .map_err(|_| AppError::InternalError)?;
+
+        sqlx::query(
+            "UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2",
+        )
+        .bind(&password_hash)
+        .bind(&user_id)
+        .execute(&state.db.pool)
+        .await?;
+    }
+
+    // Log activity
+    sqlx::query(
+        r#"
+        INSERT INTO activity_logs (user_id, action, details)
+        VALUES ($1, 'update_profile', '{"fields": ["password"]}'::jsonb)
+        "#,
+    )
+    .bind(&user_id)
+    .execute(&state.db.pool)
+    .await?;
+
+    // Fetch updated user
+    let user: User = sqlx::query_as(
+        "SELECT * FROM users WHERE id = $1",
+    )
+    .bind(&user_id)
+    .fetch_optional(&state.db.pool)
+    .await?
+    .ok_or(AppError::UserNotFound)?;
+
+    tracing::info!("User profile updated: {}", user.username);
+
+    Ok(Json(user.into()))
+}
+
 // GET /api/health
 pub async fn health_check() -> Json<MessageResponse> {
     Json(MessageResponse {

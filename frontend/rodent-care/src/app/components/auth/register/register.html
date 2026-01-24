@@ -1,0 +1,165 @@
+<p-toast position="top-center"></p-toast>
+
+<div
+  class="flex align-items-center justify-content-center min-h-screen px-3 py-4"
+>
+  <div class="w-full max-w-2xl">
+    <!-- Brand Section -->
+    <div class="text-center mb-4">
+      <i class="pi pi-heart-fill text-6xl mb-3 block text-primary"></i>
+      <h1 class="text-4xl font-bold m-0 mb-2">Join Rodent Care</h1>
+      <p class="text-lg m-0">Create your account to get started</p>
+    </div>
+
+    <!-- Register Card -->
+    <p-card styleClass="border-none shadow-4">
+      <ng-template pTemplate="content">
+        <form
+          [formGroup]="registerForm"
+          (ngSubmit)="onSubmit()"
+          class="p-fluid"
+        >
+          <!-- Username Field -->
+          <div class="field mb-4">
+            <label for="username" class="block font-semibold mb-2">
+              <i class="pi pi-user mr-2"></i>Username *
+            </label>
+            <span class="p-input-icon-left w-full">
+              <input
+                pInputText
+                id="username"
+                formControlName="username"
+                placeholder="Enter your username"
+                class="w-full"
+                [class.p-invalid]="isUsernameInvalid"
+                [disabled]="isLoading"
+              />
+            </span>
+            <small class="p-error block mt-1" *ngIf="isUsernameInvalid">
+              {{ usernameErrorMessage }}
+            </small>
+            <small class="text-color-secondary text-sm mt-1 block">
+              Username must be 3-50 characters
+            </small>
+          </div>
+
+          <!-- Email Field -->
+          <div class="field mb-4">
+            <label for="email" class="block font-semibold mb-2">
+              <i class="pi pi-envelope mr-2"></i>Email Address *
+            </label>
+            <span class="p-input-icon-left w-full">
+              <input
+                pInputText
+                id="email"
+                formControlName="email"
+                type="email"
+                placeholder="Enter your email address"
+                class="w-full"
+                [class.p-invalid]="isEmailInvalid"
+                [disabled]="isLoading"
+              />
+            </span>
+            <small class="p-error block mt-1" *ngIf="isEmailInvalid">
+              {{ emailErrorMessage }}
+            </small>
+          </div>
+
+          <!-- Role Field -->
+          <div class="field mb-4">
+            <label for="role" class="block font-semibold mb-2">
+              <i class="pi pi-id-card mr-2"></i>Role *
+            </label>
+            <p-dropdown
+              id="role"
+              formControlName="role"
+              [options]="roleOptions"
+              placeholder="Select your role"
+              styleClass="w-full"
+              [disabled]="isLoading"
+            ></p-dropdown>
+            <small class="text-color-secondary text-sm mt-1 block">
+              Choose the role that best describes your responsibilities
+            </small>
+          </div>
+
+          <!-- Password Fields Row -->
+          <div class="grid">
+            <!-- Password -->
+            <div class="col-12 md:col-6">
+              <div class="field mb-4">
+                <label for="password" class="block font-semibold mb-2">
+                  <i class="pi pi-lock mr-2"></i>Password *
+                </label>
+                <p-password
+                  formControlName="password"
+                  inputId="password"
+                  placeholder="Enter your password"
+                  styleClass="w-full"
+                  inputStyleClass="w-full"
+                  [class.p-invalid]="isPasswordInvalid"
+                  [disabled]="isLoading"
+                  [feedback]="true"
+                  [toggleMask]="true"
+                ></p-password>
+                <small class="p-error block mt-1" *ngIf="isPasswordInvalid">
+                  {{ passwordErrorMessage }}
+                </small>
+              </div>
+            </div>
+
+            <!-- Confirm Password -->
+            <div class="col-12 md:col-6">
+              <div class="field mb-4">
+                <label for="confirmPassword" class="block font-semibold mb-2">
+                  <i class="pi pi-lock mr-2"></i>Confirm Password *
+                </label>
+                <p-password
+                  formControlName="confirmPassword"
+                  inputId="confirmPassword"
+                  placeholder="Confirm your password"
+                  styleClass="w-full"
+                  inputStyleClass="w-full"
+                  [class.p-invalid]="isConfirmPasswordInvalid"
+                  [disabled]="isLoading"
+                  [feedback]="false"
+                  [toggleMask]="true"
+                ></p-password>
+                <small
+                  class="p-error block mt-1"
+                  *ngIf="isConfirmPasswordInvalid"
+                >
+                  {{ confirmPasswordErrorMessage }}
+                </small>
+              </div>
+            </div>
+          </div>
+
+          <!-- Register Button -->
+          <p-button
+            type="submit"
+            label="Create Account"
+            icon="pi pi-user-plus"
+            styleClass="w-full mb-4"
+            [loading]="isLoading"
+            [disabled]="isLoading || registerForm.invalid"
+          ></p-button>
+
+          <!-- Login Link -->
+          <div class="text-center pt-3">
+            <span class="text-color-secondary mr-2"
+              >Already have an account?</span
+            >
+            <p-button
+              link
+              label="Sign In"
+              styleClass="p-0"
+              (onClick)="navigateToLogin()"
+              [disabled]="isLoading"
+            ></p-button>
+          </div>
+        </form>
+      </ng-template>
+    </p-card>
+  </div>
+</div>

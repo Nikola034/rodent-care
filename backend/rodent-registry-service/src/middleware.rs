@@ -95,7 +95,7 @@ pub fn check_role(auth_info: &AuthInfo, allowed_roles: &[&str]) -> Result<(), Ap
 
 /// Check if user can manage rodents (Caretaker or Admin)
 pub fn can_manage_rodents(auth_info: &AuthInfo) -> Result<(), AppError> {
-    check_role(auth_info, &["admin", "caretaker"])
+    check_role(auth_info, &["admin", "caretaker", "veretinarian"])
 }
 
 /// Check if user can manage medical records (Veterinarian or Admin)
