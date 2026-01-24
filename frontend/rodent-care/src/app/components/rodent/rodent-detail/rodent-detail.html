@@ -199,6 +199,8 @@
         <!-- Quick Actions -->
         <p-card header="Quick Actions">
           <div class="flex flex-column gap-2">
+            <p-button label="Activity Tracking" icon="pi pi-chart-line" [outlined]="true"
+              styleClass="w-full" (onClick)="navigateToActivityTracking()"></p-button>
             <p-button label="Medical Records" icon="pi pi-file-edit" [outlined]="true"
               styleClass="w-full" (onClick)="navigateToMedicalRecords()"></p-button>
             @if (canManageRodents()) {

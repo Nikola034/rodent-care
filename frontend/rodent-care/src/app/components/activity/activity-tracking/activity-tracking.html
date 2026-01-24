@@ -1,0 +1,449 @@
+<p-toast position="top-right"></p-toast>
+<p-confirmDialog></p-confirmDialog>
+
+<div class="activity-tracking">
+  <!-- Header -->
+  <div class="flex align-items-center justify-content-between mb-4">
+    <div class="flex align-items-center gap-3">
+      <p-button icon="pi pi-arrow-left" [rounded]="true" [text]="true" (onClick)="navigateBack()"></p-button>
+      <div>
+        <h1 class="text-2xl font-bold text-color m-0">Activity Tracking</h1>
+        @if (rodent) {
+          <p class="text-color-secondary mt-1 mb-0">for {{ rodent.name }}</p>
+        }
+      </div>
+    </div>
+  </div>
+
+  <!-- Date Navigation -->
+  <p-card class="mb-4">
+    <div class="flex align-items-center justify-content-center gap-3">
+      <p-button icon="pi pi-chevron-left" [rounded]="true" [text]="true"
+        (onClick)="goToPreviousDay()" pTooltip="Previous Day"></p-button>
+
+      <p-calendar [(ngModel)]="selectedDate" dateFormat="DD, MM dd, yy"
+        [maxDate]="maxDate" [showIcon]="true" styleClass="w-auto"
+        (onSelect)="onDateChange()"></p-calendar>
+
+      <p-button icon="pi pi-chevron-right" [rounded]="true" [text]="true"
+        (onClick)="goToNextDay()" pTooltip="Next Day"
+        [disabled]="selectedDate >= maxDate"></p-button>
+
+      <p-button label="Today" [text]="true" (onClick)="goToToday()"></p-button>
+    </div>
+  </p-card>
+
+  @if (isLoading || isLoadingSummary) {
+    <div class="flex justify-content-center py-6">
+      <p-progressSpinner></p-progressSpinner>
+    </div>
+  } @else {
+    <!-- Summary Cards -->
+    @if (summary) {
+      <div class="grid mb-4">
+        <div class="col-12 md:col-3">
+          <p-card styleClass="h-full">
+            <div class="text-center">
+              <i class="pi pi-clock text-4xl text-primary mb-2"></i>
+              <p class="text-color-secondary mb-1">Total Activity</p>
+              <p class="text-2xl font-bold m-0">{{ summary.total_activity_minutes }} min</p>
+            </div>
+          </p-card>
+        </div>
+        <div class="col-12 md:col-3">
+          <p-card styleClass="h-full">
+            <div class="text-center">
+              <i class="pi pi-heart text-4xl text-pink-500 mb-2"></i>
+              <p class="text-color-secondary mb-1">Activities</p>
+              <p class="text-2xl font-bold m-0">{{ summary.activities.length }}</p>
+            </div>
+          </p-card>
+        </div>
+        <div class="col-12 md:col-3">
+          <p-card styleClass="h-full">
+            <div class="text-center">
+              <i class="pi pi-th-large text-4xl text-orange-500 mb-2"></i>
+              <p class="text-color-secondary mb-1">Total Food</p>
+              <p class="text-2xl font-bold m-0">{{ summary.total_food_grams }}g</p>
+            </div>
+          </p-card>
+        </div>
+        <div class="col-12 md:col-3">
+          <p-card styleClass="h-full">
+            <div class="text-center">
+              <i class="pi pi-list text-4xl text-teal-500 mb-2"></i>
+              <p class="text-color-secondary mb-1">Feedings</p>
+              <p class="text-2xl font-bold m-0">{{ summary.feeding_records.length }}</p>
+            </div>
+          </p-card>
+        </div>
+      </div>
+    }
+
+    <p-tabView>
+      <!-- Daily Measurements Tab -->
+      <p-tabPanel header="Daily Measurements">
+        <div class="flex align-items-center justify-content-between mb-4">
+          <h3 class="m-0">Daily Measurements</h3>
+          @if (canTrackActivities()) {
+            <p-button [label]="dailyRecord ? 'Edit Measurements' : 'Add Measurements'"
+              [icon]="dailyRecord ? 'pi pi-pencil' : 'pi pi-plus'"
+              (onClick)="openDailyRecordDialog()"></p-button>
+          }
+        </div>
+
+        @if (dailyRecord) {
+          <div class="grid">
+            <div class="col-12 md:col-6 lg:col-3">
+              <p-card>
+                <div class="text-center">
+                  <i class="pi pi-chart-line text-3xl text-blue-500 mb-2"></i>
+                  <p class="text-color-secondary mb-1">Weight</p>
+                  <p class="text-xl font-bold m-0">
+                    {{ dailyRecord.weight_grams !== null ? dailyRecord.weight_grams + 'g' : 'Not recorded' }}
+                  </p>
+                </div>
+              </p-card>
+            </div>
+            <div class="col-12 md:col-6 lg:col-3">
+              <p-card>
+                <div class="text-center">
+                  <i class="pi pi-sun text-3xl text-red-500 mb-2"></i>
+                  <p class="text-color-secondary mb-1">Temperature</p>
+                  <p class="text-xl font-bold m-0">
+                    {{ dailyRecord.temperature_celsius !== null ? dailyRecord.temperature_celsius + '°C' : 'Not recorded' }}
+                  </p>
+                </div>
+              </p-card>
+            </div>
+            <div class="col-12 md:col-6 lg:col-3">
+              <p-card>
+                <div class="text-center">
+                  <i class="pi pi-bolt text-3xl mb-2" [class]="getEnergyLevelColor(dailyRecord.energy_level)"></i>
+                  <p class="text-color-secondary mb-1">Energy Level</p>
+                  <p class="text-xl font-bold m-0" [class]="getEnergyLevelColor(dailyRecord.energy_level)">
+                    {{ dailyRecord.energy_level !== null ? dailyRecord.energy_level + '/10' : 'Not recorded' }}
+                  </p>
+                </div>
+              </p-card>
+            </div>
+            <div class="col-12 md:col-6 lg:col-3">
+              <p-card>
+                <div class="text-center">
+                  <i class="pi pi-heart text-3xl mb-2" [class]="getMoodLevelColor(dailyRecord.mood_level)"></i>
+                  <p class="text-color-secondary mb-1">Mood Level</p>
+                  <p class="text-xl font-bold m-0" [class]="getMoodLevelColor(dailyRecord.mood_level)">
+                    {{ dailyRecord.mood_level !== null ? dailyRecord.mood_level + '/10' : 'Not recorded' }}
+                  </p>
+                </div>
+              </p-card>
+            </div>
+          </div>
+
+          @if (dailyRecord.behavior_notes) {
+            <p-card class="mt-3">
+              <div>
+                <p class="font-semibold mb-2">Behavior Notes</p>
+                <p class="m-0">{{ dailyRecord.behavior_notes }}</p>
+              </div>
+            </p-card>
+          }
+
+          <p class="text-xs text-color-secondary mt-3">
+            Recorded by {{ dailyRecord.recorded_by_name }} on {{ dailyRecord.created_at | date:'medium' }}
+          </p>
+        } @else {
+          <p-card>
+            <div class="text-center py-4">
+              <i class="pi pi-chart-bar text-5xl text-color-secondary mb-3"></i>
+              <p class="text-xl text-color-secondary mb-3">No measurements recorded for this day</p>
+              @if (canTrackActivities()) {
+                <p-button label="Add Measurements" icon="pi pi-plus" (onClick)="openDailyRecordDialog()"></p-button>
+              }
+            </div>
+          </p-card>
+        }
+      </p-tabPanel>
+
+      <!-- Activities Tab -->
+      <p-tabPanel header="Activities">
+        <div class="flex align-items-center justify-content-between mb-4">
+          <h3 class="m-0">Activities</h3>
+          @if (canTrackActivities()) {
+            <p-button label="Log Activity" icon="pi pi-plus" (onClick)="openActivityDialog()"></p-button>
+          }
+        </div>
+
+        @if (activities.length > 0) {
+          <div class="flex flex-column gap-2">
+            @for (activity of activities; track activity.id) {
+              <p-card>
+                <div class="flex align-items-center justify-content-between">
+                  <div class="flex align-items-center gap-3">
+                    <i [class]="getActivityTypeIcon(activity.activity_type) + ' text-2xl text-primary'"></i>
+                    <div>
+                      <p class="font-semibold m-0">{{ getActivityTypeLabel(activity.activity_type) }}</p>
+                      <p class="text-color-secondary text-sm m-0">
+                        {{ activity.duration_minutes }} minutes
+                        @if (activity.intensity) {
+                          <span> &bull; Intensity: {{ activity.intensity }}/10</span>
+                        }
+                      </p>
+                      @if (activity.notes) {
+                        <p class="text-sm mt-1 mb-0">{{ activity.notes }}</p>
+                      }
+                    </div>
+                  </div>
+                  <div class="flex align-items-center gap-2">
+                    <span class="text-color-secondary text-sm">{{ activity.recorded_at | date:'shortTime' }}</span>
+                    @if (canTrackActivities()) {
+                      <p-button icon="pi pi-trash" [rounded]="true" [text]="true" severity="danger"
+                        (onClick)="confirmDeleteActivity(activity)" pTooltip="Delete"></p-button>
+                    }
+                  </div>
+                </div>
+              </p-card>
+            }
+          </div>
+        } @else {
+          <p-card>
+            <div class="text-center py-4">
+              <i class="pi pi-heart text-5xl text-color-secondary mb-3"></i>
+              <p class="text-xl text-color-secondary mb-3">No activities recorded for this day</p>
+              @if (canTrackActivities()) {
+                <p-button label="Log Activity" icon="pi pi-plus" (onClick)="openActivityDialog()"></p-button>
+              }
+            </div>
+          </p-card>
+        }
+      </p-tabPanel>
+
+      <!-- Feeding Tab -->
+      <p-tabPanel header="Feeding">
+        <div class="flex align-items-center justify-content-between mb-4">
+          <h3 class="m-0">Feeding Records</h3>
+          @if (canTrackActivities()) {
+            <p-button label="Log Feeding" icon="pi pi-plus" (onClick)="openFeedingDialog()"></p-button>
+          }
+        </div>
+
+        @if (feedingRecords.length > 0) {
+          <div class="flex flex-column gap-2">
+            @for (record of feedingRecords; track record.id) {
+              <p-card>
+                <div class="flex align-items-center justify-content-between">
+                  <div class="flex align-items-center gap-3">
+                    <i [class]="getFoodTypeIcon(record.food_type) + ' text-2xl text-orange-500'"></i>
+                    <div>
+                      <p class="font-semibold m-0">
+                        {{ getFoodTypeLabel(record.food_type) }}
+                      </p>
+                      <p class="text-color-secondary text-sm m-0">
+                        {{ record.quantity_grams }}g
+                      </p>
+                      @if (record.notes) {
+                        <p class="text-sm mt-1 mb-0">{{ record.notes }}</p>
+                      }
+                    </div>
+                  </div>
+                  <div class="flex align-items-center gap-2">
+                    <span class="text-color-secondary text-sm">{{ record.meal_time | date:'shortTime' }}</span>
+                    @if (canTrackActivities()) {
+                      <p-button icon="pi pi-pencil" [rounded]="true" [text]="true"
+                        (onClick)="openEditFeedingDialog(record)" pTooltip="Edit"></p-button>
+                      <p-button icon="pi pi-trash" [rounded]="true" [text]="true" severity="danger"
+                        (onClick)="confirmDeleteFeeding(record)" pTooltip="Delete"></p-button>
+                    }
+                  </div>
+                </div>
+              </p-card>
+            }
+          </div>
+        } @else {
+          <p-card>
+            <div class="text-center py-4">
+              <i class="pi pi-th-large text-5xl text-color-secondary mb-3"></i>
+              <p class="text-xl text-color-secondary mb-3">No feeding records for this day</p>
+              @if (canTrackActivities()) {
+                <p-button label="Log Feeding" icon="pi pi-plus" (onClick)="openFeedingDialog()"></p-button>
+              }
+            </div>
+          </p-card>
+        }
+      </p-tabPanel>
+    </p-tabView>
+  }
+</div>
+
+<!-- Daily Record Dialog -->
+<p-dialog [header]="isEditingDailyRecord ? 'Edit Daily Measurements' : 'Add Daily Measurements'"
+  [(visible)]="showDailyRecordDialog" [modal]="true" [style]="{width: '500px'}" [closable]="!isSavingDailyRecord">
+  <form [formGroup]="dailyRecordForm">
+    <div class="grid">
+      <!-- Weight -->
+      <div class="col-12 md:col-6">
+        <div class="field">
+          <label for="weight_grams" class="font-semibold">Weight (grams)</label>
+          <p-inputNumber id="weight_grams" formControlName="weight_grams"
+            [min]="0" [max]="10000" styleClass="w-full" placeholder="e.g., 150"></p-inputNumber>
+        </div>
+      </div>
+
+      <!-- Temperature -->
+      <div class="col-12 md:col-6">
+        <div class="field">
+          <label for="temperature_celsius" class="font-semibold">Temperature (°C)</label>
+          <p-inputNumber id="temperature_celsius" formControlName="temperature_celsius"
+            [min]="30" [max]="45" [minFractionDigits]="1" [maxFractionDigits]="1"
+            styleClass="w-full" placeholder="e.g., 37.5"></p-inputNumber>
+        </div>
+      </div>
+
+      <!-- Energy Level -->
+      <div class="col-12">
+        <div class="field">
+          <label class="font-semibold">Energy Level: {{ dailyRecordForm.get('energy_level')?.value || 5 }}/10</label>
+          <p-slider formControlName="energy_level" [min]="1" [max]="10" styleClass="w-full"></p-slider>
+        </div>
+      </div>
+
+      <!-- Mood Level -->
+      <div class="col-12">
+        <div class="field">
+          <label class="font-semibold">Mood Level: {{ dailyRecordForm.get('mood_level')?.value || 5 }}/10</label>
+          <p-slider formControlName="mood_level" [min]="1" [max]="10" styleClass="w-full"></p-slider>
+        </div>
+      </div>
+
+      <!-- Behavior Notes -->
+      <div class="col-12">
+        <div class="field">
+          <label for="behavior_notes" class="font-semibold">Behavior Notes</label>
+          <textarea pInputTextarea id="behavior_notes" formControlName="behavior_notes" rows="3"
+            class="w-full" placeholder="Any notable behavior observations..."></textarea>
+        </div>
+      </div>
+    </div>
+  </form>
+
+  <ng-template pTemplate="footer">
+    <p-button label="Cancel" [text]="true" (onClick)="showDailyRecordDialog = false"
+      [disabled]="isSavingDailyRecord"></p-button>
+    <p-button [label]="isEditingDailyRecord ? 'Save Changes' : 'Save'" icon="pi pi-check"
+      (onClick)="saveDailyRecord()" [loading]="isSavingDailyRecord"></p-button>
+  </ng-template>
+</p-dialog>
+
+<!-- Activity Dialog -->
+<p-dialog header="Log Activity" [(visible)]="showActivityDialog" [modal]="true"
+  [style]="{width: '500px'}" [closable]="!isSavingActivity">
+  <form [formGroup]="activityForm">
+    <div class="grid">
+      <!-- Activity Type -->
+      <div class="col-12">
+        <div class="field">
+          <label for="activity_type" class="font-semibold">Activity Type *</label>
+          <p-dropdown id="activity_type" formControlName="activity_type" [options]="activityTypeOptions"
+            placeholder="Select activity" styleClass="w-full"
+            [class.p-invalid]="isFieldInvalid(activityForm, 'activity_type')"></p-dropdown>
+        </div>
+      </div>
+
+      <!-- Duration -->
+      <div class="col-12 md:col-6">
+        <div class="field">
+          <label for="duration_minutes" class="font-semibold">Duration (minutes) *</label>
+          <p-inputNumber id="duration_minutes" formControlName="duration_minutes"
+            [min]="1" [max]="1440" styleClass="w-full" placeholder="e.g., 30"
+            [class.p-invalid]="isFieldInvalid(activityForm, 'duration_minutes')"></p-inputNumber>
+        </div>
+      </div>
+
+      <!-- Time -->
+      <div class="col-12 md:col-6">
+        <div class="field">
+          <label for="recorded_at" class="font-semibold">Time</label>
+          <p-calendar id="recorded_at" formControlName="recorded_at" [showTime]="true"
+            [timeOnly]="true" styleClass="w-full"></p-calendar>
+        </div>
+      </div>
+
+      <!-- Intensity -->
+      <div class="col-12">
+        <div class="field">
+          <label class="font-semibold">Intensity: {{ activityForm.get('intensity')?.value || 5 }}/10</label>
+          <p-slider formControlName="intensity" [min]="1" [max]="10" styleClass="w-full"></p-slider>
+        </div>
+      </div>
+
+      <!-- Notes -->
+      <div class="col-12">
+        <div class="field">
+          <label for="activity_notes" class="font-semibold">Notes</label>
+          <textarea pInputTextarea id="activity_notes" formControlName="notes" rows="2"
+            class="w-full" placeholder="Any additional observations..."></textarea>
+        </div>
+      </div>
+    </div>
+  </form>
+
+  <ng-template pTemplate="footer">
+    <p-button label="Cancel" [text]="true" (onClick)="showActivityDialog = false"
+      [disabled]="isSavingActivity"></p-button>
+    <p-button label="Log Activity" icon="pi pi-check"
+      (onClick)="saveActivity()" [loading]="isSavingActivity"></p-button>
+  </ng-template>
+</p-dialog>
+
+<!-- Feeding Dialog -->
+<p-dialog [header]="isEditingFeeding ? 'Edit Feeding Record' : 'Log Feeding'"
+  [(visible)]="showFeedingDialog" [modal]="true" [style]="{width: '500px'}" [closable]="!isSavingFeeding">
+  <form [formGroup]="feedingForm">
+    <div class="grid">
+      <!-- Food Type -->
+      <div class="col-12 md:col-6">
+        <div class="field">
+          <label for="food_type" class="font-semibold">Food Type *</label>
+          <p-dropdown id="food_type" formControlName="food_type" [options]="foodTypeOptions"
+            placeholder="Select food type" styleClass="w-full"
+            [class.p-invalid]="isFieldInvalid(feedingForm, 'food_type')"></p-dropdown>
+        </div>
+      </div>
+
+      <!-- Quantity -->
+      <div class="col-12 md:col-6">
+        <div class="field">
+          <label for="quantity_grams" class="font-semibold">Quantity (grams) *</label>
+          <p-inputNumber id="quantity_grams" formControlName="quantity_grams"
+            [min]="0.1" [max]="10000" [minFractionDigits]="1" styleClass="w-full" placeholder="e.g., 25"
+            [class.p-invalid]="isFieldInvalid(feedingForm, 'quantity_grams')"></p-inputNumber>
+        </div>
+      </div>
+
+      <!-- Meal Time -->
+      <div class="col-12 md:col-6">
+        <div class="field">
+          <label for="meal_time" class="font-semibold">Meal Time</label>
+          <p-calendar id="meal_time" formControlName="meal_time" [showTime]="true"
+            styleClass="w-full"></p-calendar>
+        </div>
+      </div>
+
+      <!-- Notes -->
+      <div class="col-12">
+        <div class="field">
+          <label for="feeding_notes" class="font-semibold">Notes</label>
+          <textarea pInputTextarea id="feeding_notes" formControlName="notes" rows="2"
+            class="w-full" placeholder="Any additional notes..."></textarea>
+        </div>
+      </div>
+    </div>
+  </form>
+
+  <ng-template pTemplate="footer">
+    <p-button label="Cancel" [text]="true" (onClick)="showFeedingDialog = false"
+      [disabled]="isSavingFeeding"></p-button>
+    <p-button [label]="isEditingFeeding ? 'Save Changes' : 'Log Feeding'" icon="pi pi-check"
+      (onClick)="saveFeeding()" [loading]="isSavingFeeding"></p-button>
+  </ng-template>
+</p-dialog>

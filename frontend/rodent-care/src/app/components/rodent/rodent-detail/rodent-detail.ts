@@ -156,6 +156,12 @@ export class RodentDetail implements OnInit, OnDestroy {
     }
   }
 
+  navigateToActivityTracking(): void {
+    if (this.rodentId) {
+      this.router.navigate(['/app/rodents', this.rodentId, 'activity']);
+    }
+  }
+
   navigateBack(): void {
     this.router.navigate(['/app/rodents']);
   }

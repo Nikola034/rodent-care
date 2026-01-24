@@ -48,6 +48,10 @@ export const routes: Routes = [
         path: 'rodents/:id/medical-records',
         loadComponent: () => import('./components/medical/medical-records/medical-records').then(m => m.MedicalRecords)
       },
+      {
+        path: 'rodents/:id/activity',
+        loadComponent: () => import('./components/activity/activity-tracking/activity-tracking').then(m => m.ActivityTracking)
+      },
       // Profile route
       {
         path: 'profile',

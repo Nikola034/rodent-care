@@ -313,6 +313,14 @@ export class AuthService {
   }
 
   /**
+   * Check if user can track activities (admin, caretaker, veterinarian)
+   */
+  canTrackActivities(): boolean {
+    const role = this.getRoleFromToken();
+    return role === 'Admin' || role === 'Caretaker' || role === 'Veterinarian';
+  }
+
+  /**
    * Check if user can view data (all authenticated users)
    */
   canView(): boolean {

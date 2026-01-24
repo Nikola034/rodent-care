@@ -57,12 +57,20 @@ pub async fn services_health(State(state): State<Arc<AppState>>) -> impl IntoRes
         .map(|r| r.status().is_success())
         .unwrap_or(false);
 
+    let activity_tracking_health = state
+        .http_client
+        .get(format!("{}/api/health", state.config.activity_tracking_service_url))
+        .send()
+        .await
+        .map(|r| r.status().is_success())
+        .unwrap_or(false);
+
     Json(json!({
         "success": true,
         "services": {
             "user_service": user_service_health,
             "rodent_registry_service": rodent_registry_health,
-            "activity_tracking_service": false, // Not implemented yet
+            "activity_tracking_service": activity_tracking_health,
             "analytics_service": false // Not implemented yet
         }
     }))
@@ -132,10 +140,11 @@ pub fn create_routes(state: Arc<AppState>) -> Router<Arc<AppState>> {
         .route("/rodents/*path", any(proxy_to_rodent_registry_service))
         .layer(middleware::from_fn_with_state(state.clone(), auth_middleware));
 
-    // Future service routes (placeholders)
+    // Activity Tracking Service routes (protected with authentication)
     let activity_routes = Router::new()
         .route("/activities", any(proxy_to_activity_tracking_service))
-        .route("/activities/*path", any(proxy_to_activity_tracking_service));
+        .route("/activities/*path", any(proxy_to_activity_tracking_service))
+        .layer(middleware::from_fn_with_state(state.clone(), auth_middleware));
 
     let analytics_routes = Router::new()
         .route("/analytics", any(proxy_to_analytics_service))
