@@ -61,11 +61,13 @@ pub async fn auth_middleware(
     };
 
     // Validate token with User Service
-    tracing::debug!("Validating token with User Service at: {}/api/auth/validate", state.config.user_service_url);
+    let validate_url = format!("{}/api/auth/validate", state.config.user_service_url);
+    tracing::info!("Validating token with User Service at: {}", validate_url);
+    tracing::info!("Token (first 50 chars): {}...", &token[..50.min(token.len())]);
 
     let validation_response = state
         .http_client
-        .post(format!("{}/api/auth/validate", state.config.user_service_url))
+        .post(&validate_url)
         .header("Content-Type", "application/json")
         .json(&serde_json::json!({ "token": token }))
         .send()
@@ -75,17 +77,23 @@ pub async fn auth_middleware(
             GatewayError::ServiceUnavailable("User service unavailable".to_string())
         })?;
 
-    tracing::debug!("Token validation response status: {}", validation_response.status());
+    let status = validation_response.status();
+    tracing::info!("Token validation response status: {}", status);
 
-    let validation: TokenValidationResponse = validation_response
-        .json()
-        .await
+    let response_text = validation_response.text().await.map_err(|e| {
+        tracing::error!("Failed to read validation response: {:?}", e);
+        GatewayError::InternalError
+    })?;
+
+    tracing::info!("Token validation response body: {}", response_text);
+
+    let validation: TokenValidationResponse = serde_json::from_str(&response_text)
         .map_err(|e| {
             tracing::error!("Failed to parse validation response: {:?}", e);
             GatewayError::InternalError
         })?;
 
-    tracing::debug!("Token validation result: valid={}", validation.valid);
+    tracing::info!("Token validation result: valid={}", validation.valid);
 
     if !validation.valid {
         return Err(GatewayError::InvalidToken);
