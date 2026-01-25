@@ -8,7 +8,9 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 mod config;
 mod db;
 mod error;
+mod events;
 mod handlers;
+mod messaging;
 mod models;
 mod routes;
 
@@ -47,6 +49,12 @@ async fn main() {
     db.create_indexes()
         .await
         .expect("Failed to create database indexes");
+
+    // Create shared DB for the consumer
+    let db_arc = Arc::new(db.clone());
+
+    // Start RabbitMQ event consumer in background
+    messaging::spawn_consumer(config.rabbitmq_url.clone(), db_arc);
 
     // Create application state
     let state = Arc::new(AppState {

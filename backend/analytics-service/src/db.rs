@@ -4,10 +4,12 @@ use tracing::info;
 
 use crate::config::Config;
 
+#[derive(Clone)]
 pub struct MongoDB {
     pub db: Database,
     pub rodent_db: Database,
     pub activity_db: Database,
+    pub analytics_db: Database,
 }
 
 impl MongoDB {
@@ -25,7 +27,10 @@ impl MongoDB {
         db.run_command(doc! { "ping": 1 }, None).await?;
         info!("Connected to MongoDB database: {}", config.database_name);
 
-        Ok(Self { db, rodent_db, activity_db })
+        // analytics_db is the same as db, used by messaging consumer
+        let analytics_db = db.clone();
+
+        Ok(Self { db, rodent_db, activity_db, analytics_db })
     }
 
     pub async fn create_indexes(&self) -> Result<(), mongodb::error::Error> {

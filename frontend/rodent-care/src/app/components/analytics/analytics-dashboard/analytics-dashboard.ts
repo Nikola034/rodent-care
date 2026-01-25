@@ -592,10 +592,57 @@ export class AnalyticsDashboard implements OnInit, OnDestroy {
 
   generateReport(reportType: string, period: 'monthly' | 'annual'): void {
     this.isGeneratingReport = true;
+    const periodLabel = period === 'monthly' ? 'Monthly' : 'Annual';
+    const dateRange = this.getReportDateRange(period);
+    
+    // Build query params for the report period
+    const reportParams: AnalyticsQueryParams = {
+      from_date: dateRange.start.toISOString(),
+      to_date: dateRange.end.toISOString()
+    };
+    if (this.selectedSpecies) {
+      reportParams.species = this.selectedSpecies;
+    }
+
+    // Fetch fresh data for the report period
+    forkJoin({
+      population: this.analyticsService.getPopulationStats(reportParams),
+      health: this.analyticsService.getHealthAnalytics(reportParams),
+      activity: this.analyticsService.getActivityAnalytics(reportParams),
+      feeding: this.analyticsService.getFeedingAnalytics(reportParams)
+    })
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (data) => {
+          this.buildAndDownloadReport(reportType, period, dateRange, data);
+          this.isGeneratingReport = false;
+        },
+        error: () => {
+          this.messageService.add({
+            severity: 'error',
+            summary: 'Error',
+            detail: 'Failed to fetch data for report',
+            life: 5000
+          });
+          this.isGeneratingReport = false;
+        }
+      });
+  }
+
+  private buildAndDownloadReport(
+    reportType: string,
+    period: 'monthly' | 'annual',
+    dateRange: { start: Date; end: Date },
+    data: {
+      population: PopulationStatsResponse;
+      health: HealthAnalyticsResponse;
+      activity: ActivityAnalyticsResponse;
+      feeding: FeedingAnalyticsResponse;
+    }
+  ): void {
     const doc = new jsPDF();
     const currentDate = new Date();
     const periodLabel = period === 'monthly' ? 'Monthly' : 'Annual';
-    const dateRange = this.getReportDateRange(period);
     
     // Header
     doc.setFontSize(20);
@@ -616,16 +663,16 @@ export class AnalyticsDashboard implements OnInit, OnDestroy {
 
     switch (reportType) {
       case 'activity':
-        yPosition = this.generateActivityReport(doc, yPosition);
+        yPosition = this.generateActivityReportWithData(doc, yPosition, data.activity);
         break;
       case 'feeding':
-        yPosition = this.generateFeedingReport(doc, yPosition);
+        yPosition = this.generateFeedingReportWithData(doc, yPosition, data.feeding);
         break;
       case 'population':
-        yPosition = this.generatePopulationReport(doc, yPosition);
+        yPosition = this.generatePopulationReportWithData(doc, yPosition, data.population);
         break;
       case 'health':
-        yPosition = this.generateHealthReport(doc, yPosition);
+        yPosition = this.generateHealthReportWithData(doc, yPosition, data.health);
         break;
     }
 
@@ -642,7 +689,6 @@ export class AnalyticsDashboard implements OnInit, OnDestroy {
     const fileName = `${reportType}_${period}_report_${this.formatDateForFilename(currentDate)}.pdf`;
     doc.save(fileName);
     
-    this.isGeneratingReport = false;
     this.messageService.add({
       severity: 'success',
       summary: 'Report Generated',
@@ -652,30 +698,65 @@ export class AnalyticsDashboard implements OnInit, OnDestroy {
 
   generateAllReports(period: 'monthly' | 'annual'): void {
     this.isGeneratingReport = true;
-    const types = ['activity', 'feeding', 'population', 'health'];
-    let delay = 0;
+    const dateRange = this.getReportDateRange(period);
     
-    types.forEach((type, index) => {
-      setTimeout(() => {
-        this.generateReportSilent(type, period);
-        if (index === types.length - 1) {
+    // Build query params for the report period
+    const reportParams: AnalyticsQueryParams = {
+      from_date: dateRange.start.toISOString(),
+      to_date: dateRange.end.toISOString()
+    };
+    if (this.selectedSpecies) {
+      reportParams.species = this.selectedSpecies;
+    }
+
+    // Fetch all data once for all reports
+    forkJoin({
+      population: this.analyticsService.getPopulationStats(reportParams),
+      health: this.analyticsService.getHealthAnalytics(reportParams),
+      activity: this.analyticsService.getActivityAnalytics(reportParams),
+      feeding: this.analyticsService.getFeedingAnalytics(reportParams)
+    })
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (data) => {
+          const types = ['activity', 'feeding', 'population', 'health'];
+          types.forEach((type) => {
+            this.buildAndDownloadReportSilent(type, period, dateRange, data);
+          });
+          
           this.isGeneratingReport = false;
           this.messageService.add({
             severity: 'success',
             summary: 'All Reports Generated',
             detail: `All ${period} reports have been downloaded`
           });
+        },
+        error: () => {
+          this.messageService.add({
+            severity: 'error',
+            summary: 'Error',
+            detail: 'Failed to fetch data for reports',
+            life: 5000
+          });
+          this.isGeneratingReport = false;
         }
-      }, delay);
-      delay += 500;
-    });
+      });
   }
 
-  private generateReportSilent(reportType: string, period: 'monthly' | 'annual'): void {
+  private buildAndDownloadReportSilent(
+    reportType: string,
+    period: 'monthly' | 'annual',
+    dateRange: { start: Date; end: Date },
+    data: {
+      population: PopulationStatsResponse;
+      health: HealthAnalyticsResponse;
+      activity: ActivityAnalyticsResponse;
+      feeding: FeedingAnalyticsResponse;
+    }
+  ): void {
     const doc = new jsPDF();
     const currentDate = new Date();
     const periodLabel = period === 'monthly' ? 'Monthly' : 'Annual';
-    const dateRange = this.getReportDateRange(period);
     
     // Header
     doc.setFontSize(20);
@@ -696,16 +777,16 @@ export class AnalyticsDashboard implements OnInit, OnDestroy {
 
     switch (reportType) {
       case 'activity':
-        yPosition = this.generateActivityReport(doc, yPosition);
+        yPosition = this.generateActivityReportWithData(doc, yPosition, data.activity);
         break;
       case 'feeding':
-        yPosition = this.generateFeedingReport(doc, yPosition);
+        yPosition = this.generateFeedingReportWithData(doc, yPosition, data.feeding);
         break;
       case 'population':
-        yPosition = this.generatePopulationReport(doc, yPosition);
+        yPosition = this.generatePopulationReportWithData(doc, yPosition, data.population);
         break;
       case 'health':
-        yPosition = this.generateHealthReport(doc, yPosition);
+        yPosition = this.generateHealthReportWithData(doc, yPosition, data.health);
         break;
     }
 
@@ -1020,6 +1101,302 @@ export class AnalyticsDashboard implements OnInit, OnDestroy {
           startY: y,
           head: [['Date', 'Rodent', 'Type', 'Description', 'Veterinarian']],
           body: this.healthAnalytics.recent_treatments.map(item => [
+            new Date(item.date).toLocaleDateString(),
+            item.rodent_name,
+            this.formatRecordType(item.record_type),
+            item.description.length > 30 ? item.description.substring(0, 30) + '...' : item.description,
+            item.veterinarian_name
+          ]),
+          theme: 'striped',
+          headStyles: { fillColor: [217, 83, 79] },
+          columnStyles: {
+            3: { cellWidth: 50 }
+          }
+        });
+        y = (doc as any).lastAutoTable.finalY + 10;
+      }
+    } else {
+      doc.setFontSize(10);
+      doc.text('No health data available for the selected period.', 14, y);
+      y += 10;
+    }
+
+    return y;
+  }
+
+  // ==================== Report Generation Methods with Data ====================
+
+  private generateActivityReportWithData(doc: jsPDF, startY: number, activityData: ActivityAnalyticsResponse | null): number {
+    let y = startY;
+
+    if (activityData) {
+      // Summary Section
+      doc.setFontSize(14);
+      doc.setTextColor(60, 60, 60);
+      doc.text('Activity Summary', 14, y);
+      y += 8;
+
+      doc.setFontSize(10);
+      doc.setTextColor(80, 80, 80);
+      doc.text(`Total Activity Duration: ${activityData.total_activity_minutes} minutes`, 14, y);
+      y += 6;
+      doc.text(`Average Daily Activity: ${activityData.avg_daily_activity.toFixed(1)} minutes`, 14, y);
+      y += 12;
+
+      // Activity by Type Table
+      if (activityData.by_activity_type?.length > 0) {
+        doc.setFontSize(12);
+        doc.text('Activity by Type', 14, y);
+        y += 6;
+
+        autoTable(doc, {
+          startY: y,
+          head: [['Activity Type', 'Sessions', 'Total Minutes', 'Avg Duration']],
+          body: activityData.by_activity_type.map((item: any) => [
+            this.formatActivityTypeLabel(item.activity_type),
+            item.session_count.toString(),
+            item.total_minutes.toString(),
+            item.avg_duration.toFixed(1)
+          ]),
+          theme: 'striped',
+          headStyles: { fillColor: [66, 139, 202] }
+        });
+        y = (doc as any).lastAutoTable.finalY + 10;
+      }
+
+      // Most Active Rodents Table
+      if (activityData.most_active_rodents?.length > 0) {
+        doc.setFontSize(12);
+        doc.text('Most Active Rodents', 14, y);
+        y += 6;
+
+        autoTable(doc, {
+          startY: y,
+          head: [['Rodent Name', 'Total Minutes', 'Session Count']],
+          body: activityData.most_active_rodents.map((item: any) => [
+            item.rodent_name,
+            item.total_minutes.toString(),
+            item.session_count.toString()
+          ]),
+          theme: 'striped',
+          headStyles: { fillColor: [66, 139, 202] }
+        });
+        y = (doc as any).lastAutoTable.finalY + 10;
+      }
+    } else {
+      doc.setFontSize(10);
+      doc.text('No activity data available for the selected period.', 14, y);
+      y += 10;
+    }
+
+    return y;
+  }
+
+  private generateFeedingReportWithData(doc: jsPDF, startY: number, feedingData: FeedingAnalyticsResponse | null): number {
+    let y = startY;
+
+    if (feedingData) {
+      // Summary Section
+      doc.setFontSize(14);
+      doc.setTextColor(60, 60, 60);
+      doc.text('Feeding Summary', 14, y);
+      y += 8;
+
+      doc.setFontSize(10);
+      doc.setTextColor(80, 80, 80);
+      doc.text(`Total Food Consumed: ${feedingData.total_food_grams.toFixed(1)} grams`, 14, y);
+      y += 6;
+      doc.text(`Average Daily Food: ${feedingData.avg_daily_food.toFixed(1)} grams`, 14, y);
+      y += 6;
+      doc.text(`Consumption Rate: ${(feedingData.consumption_rate * 100).toFixed(1)}%`, 14, y);
+      y += 12;
+
+      // Feeding by Food Type Table
+      if (feedingData.by_food_type?.length > 0) {
+        doc.setFontSize(12);
+        doc.text('Consumption by Food Type', 14, y);
+        y += 6;
+
+        autoTable(doc, {
+          startY: y,
+          head: [['Food Type', 'Feeding Count', 'Total Grams', 'Avg Quantity']],
+          body: feedingData.by_food_type.map((item: any) => [
+            this.formatFoodTypeLabel(item.food_type),
+            item.feeding_count.toString(),
+            item.total_grams.toFixed(1),
+            item.avg_quantity.toFixed(1)
+          ]),
+          theme: 'striped',
+          headStyles: { fillColor: [92, 184, 92] }
+        });
+        y = (doc as any).lastAutoTable.finalY + 10;
+      }
+
+      // Top Consumers Table
+      if (feedingData.top_consumers?.length > 0) {
+        doc.setFontSize(12);
+        doc.text('Top Consumers', 14, y);
+        y += 6;
+
+        autoTable(doc, {
+          startY: y,
+          head: [['Rodent Name', 'Total Grams', 'Feeding Count']],
+          body: feedingData.top_consumers.map(item => [
+            item.rodent_name,
+            item.total_grams.toFixed(1),
+            item.feeding_count.toString()
+          ]),
+          theme: 'striped',
+          headStyles: { fillColor: [92, 184, 92] }
+        });
+        y = (doc as any).lastAutoTable.finalY + 10;
+      }
+    } else {
+      doc.setFontSize(10);
+      doc.text('No feeding data available for the selected period.', 14, y);
+      y += 10;
+    }
+
+    return y;
+  }
+
+  private generatePopulationReportWithData(doc: jsPDF, startY: number, populationData: PopulationStatsResponse | null): number {
+    let y = startY;
+
+    if (populationData) {
+      // Summary Section
+      doc.setFontSize(14);
+      doc.setTextColor(60, 60, 60);
+      doc.text('Population Overview', 14, y);
+      y += 8;
+
+      doc.setFontSize(10);
+      doc.setTextColor(80, 80, 80);
+      doc.text(`Total Rodents: ${populationData.total_rodents}`, 14, y);
+      y += 6;
+      doc.text(`Recent Intakes: ${populationData.recent_intakes}`, 14, y);
+      y += 6;
+      doc.text(`Recent Adoptions: ${populationData.recent_adoptions}`, 14, y);
+      y += 12;
+
+      // Species Distribution Table
+      if (populationData.by_species?.length > 0) {
+        doc.setFontSize(12);
+        doc.text('Distribution by Species', 14, y);
+        y += 6;
+
+        autoTable(doc, {
+          startY: y,
+          head: [['Species', 'Count', 'Percentage']],
+          body: populationData.by_species.map((item: any) => [
+            this.formatSpeciesLabel(item.species),
+            item.count.toString(),
+            `${item.percentage.toFixed(1)}%`
+          ]),
+          theme: 'striped',
+          headStyles: { fillColor: [240, 173, 78] }
+        });
+        y = (doc as any).lastAutoTable.finalY + 10;
+      }
+
+      // Gender Distribution Table
+      if (populationData.by_gender) {
+        doc.setFontSize(12);
+        doc.text('Distribution by Gender', 14, y);
+        y += 6;
+
+        const totalRodents = populationData.total_rodents || 1;
+        const genderData = [
+          ['Male', populationData.by_gender.male.toString(), `${((populationData.by_gender.male / totalRodents) * 100).toFixed(1)}%`],
+          ['Female', populationData.by_gender.female.toString(), `${((populationData.by_gender.female / totalRodents) * 100).toFixed(1)}%`],
+          ['Unknown', populationData.by_gender.unknown.toString(), `${((populationData.by_gender.unknown / totalRodents) * 100).toFixed(1)}%`]
+        ];
+
+        autoTable(doc, {
+          startY: y,
+          head: [['Gender', 'Count', 'Percentage']],
+          body: genderData,
+          theme: 'striped',
+          headStyles: { fillColor: [240, 173, 78] }
+        });
+        y = (doc as any).lastAutoTable.finalY + 10;
+      }
+
+      // Status Distribution Table
+      if (populationData.by_status?.length > 0) {
+        doc.setFontSize(12);
+        doc.text('Distribution by Status', 14, y);
+        y += 6;
+
+        const totalRodents = populationData.total_rodents || 1;
+        autoTable(doc, {
+          startY: y,
+          head: [['Status', 'Count', 'Percentage']],
+          body: populationData.by_status.map((item: any) => [
+            this.formatStatusLabel(item.status),
+            item.count.toString(),
+            `${((item.count / totalRodents) * 100).toFixed(1)}%`
+          ]),
+          theme: 'striped',
+          headStyles: { fillColor: [240, 173, 78] }
+        });
+        y = (doc as any).lastAutoTable.finalY + 10;
+      }
+    } else {
+      doc.setFontSize(10);
+      doc.text('No population data available.', 14, y);
+      y += 10;
+    }
+
+    return y;
+  }
+
+  private generateHealthReportWithData(doc: jsPDF, startY: number, healthData: HealthAnalyticsResponse | null): number {
+    let y = startY;
+
+    if (healthData) {
+      // Summary Section
+      doc.setFontSize(14);
+      doc.setTextColor(60, 60, 60);
+      doc.text('Health Overview', 14, y);
+      y += 8;
+
+      doc.setFontSize(10);
+      doc.setTextColor(80, 80, 80);
+      doc.text(`Health Observations: ${healthData.health_observations_count}`, 14, y);
+      y += 6;
+      doc.text(`Medical Records: ${healthData.recent_treatments?.length || 0}`, 14, y);
+      y += 12;
+
+      // Treatments by Type Table
+      if (healthData.treatments_by_type?.length > 0) {
+        doc.setFontSize(12);
+        doc.text('Medical Records by Type', 14, y);
+        y += 6;
+
+        autoTable(doc, {
+          startY: y,
+          head: [['Record Type', 'Count']],
+          body: healthData.treatments_by_type.map(item => [
+            this.formatRecordType(item.record_type),
+            item.count.toString()
+          ]),
+          theme: 'striped',
+          headStyles: { fillColor: [217, 83, 79] }
+        });
+        y = (doc as any).lastAutoTable.finalY + 10;
+      }
+
+      // Recent Treatments Table
+      if (healthData.recent_treatments?.length > 0) {
+        doc.setFontSize(12);
+        doc.text('Recent Medical Records', 14, y);
+        y += 6;
+
+        autoTable(doc, {
+          startY: y,
+          head: [['Date', 'Rodent', 'Type', 'Description', 'Veterinarian']],
+          body: healthData.recent_treatments.map(item => [
             new Date(item.date).toLocaleDateString(),
             item.rodent_name,
             this.formatRecordType(item.record_type),

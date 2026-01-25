@@ -94,13 +94,74 @@ services:
       DATABASE_NAME: rodent_registry
       USER_SERVICE_URL: http://user-service:8001
       MAX_IMAGE_SIZE_MB: 5
+      RABBITMQ_URL: amqp://rodentcare:rodentcare_password@rabbitmq:5672
+      JWT_SECRET: your-super-secret-jwt-key-change-in-production-please
       RUST_LOG: info
     ports:
       - "8002:8002"
     depends_on:
       mongodb:
         condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
       user-service:
+        condition: service_started
+    networks:
+      - rodent-care-network
+    restart: unless-stopped
+
+  # Activity Tracking Service
+  activity-tracking-service:
+    build:
+      context: ./backend
+      dockerfile: activity-tracking-service/Dockerfile
+    container_name: rodent-care-activity-tracking-service
+    environment:
+      PORT: 8003
+      MONGODB_URI: mongodb://rodentcare:rodentcare_password@mongodb:27017/?authSource=admin
+      DATABASE_NAME: activity_tracking
+      USER_SERVICE_URL: http://user-service:8001
+      RABBITMQ_URL: amqp://rodentcare:rodentcare_password@rabbitmq:5672
+      JWT_SECRET: your-super-secret-jwt-key-change-in-production-please
+      RUST_LOG: info
+    ports:
+      - "8003:8003"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      user-service:
+        condition: service_started
+    networks:
+      - rodent-care-network
+    restart: unless-stopped
+
+  # Analytics Service
+  analytics-service:
+    build:
+      context: ./backend
+      dockerfile: analytics-service/Dockerfile
+    container_name: rodent-care-analytics-service
+    environment:
+      PORT: 8004
+      MONGODB_URI: mongodb://rodentcare:rodentcare_password@mongodb:27017/?authSource=admin
+      DATABASE_NAME: analytics
+      RODENT_SERVICE_URL: http://rodent-registry-service:8002
+      ACTIVITY_SERVICE_URL: http://activity-tracking-service:8003
+      RABBITMQ_URL: amqp://rodentcare:rodentcare_password@rabbitmq:5672
+      JWT_SECRET: your-super-secret-jwt-key-change-in-production-please
+      RUST_LOG: info
+    ports:
+      - "8004:8004"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      rodent-registry-service:
+        condition: service_started
+      activity-tracking-service:
         condition: service_started
     networks:
       - rodent-care-network
@@ -126,6 +187,8 @@ services:
     depends_on:
       - user-service
       - rodent-registry-service
+      - activity-tracking-service
+      - analytics-service
     networks:
       - rodent-care-network
     restart: unless-stopped

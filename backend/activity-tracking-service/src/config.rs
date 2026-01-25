@@ -7,6 +7,7 @@ pub struct Config {
     pub database_name: String,
     pub user_service_url: String,
     pub jwt_secret: String,
+    pub rabbitmq_url: String,
 }
 
 impl Config {
@@ -24,6 +25,8 @@ impl Config {
                 .unwrap_or_else(|_| "http://localhost:8001".to_string()),
             jwt_secret: env::var("JWT_SECRET")
                 .expect("JWT_SECRET must be set"),
+            rabbitmq_url: env::var("RABBITMQ_URL")
+                .unwrap_or_else(|_| "amqp://rodentcare:rodentcare_password@localhost:5672".to_string()),
         }
     }
 }

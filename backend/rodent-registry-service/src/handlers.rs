@@ -15,6 +15,10 @@ use validator::Validate;
 
 use crate::{
     error::AppError,
+    events::{
+        MedicalTreatmentAddedEvent, MedicalTreatmentPayload, RodentRegisteredEvent,
+        RodentRegisteredPayload, RodentStatusChangedEvent, RodentStatusChangedPayload,
+    },
     middleware::{can_manage_medical_records, can_manage_rodents, can_view},
     models::*,
     AppState,
@@ -193,7 +197,7 @@ pub async fn create_rodent(
         created_at: now,
         updated_at: now,
         created_by: auth_info.user_id.clone(),
-        updated_by: auth_info.user_id,
+        updated_by: auth_info.user_id.clone(),
     };
 
     let result = collection.insert_one(&rodent, None).await?;
@@ -204,6 +208,22 @@ pub async fn create_rodent(
         .find_one(doc! { "_id": inserted_id }, None)
         .await?
         .ok_or(AppError::InternalError)?;
+
+    // Publish RodentRegistered event
+    let event = RodentRegisteredEvent::new(RodentRegisteredPayload {
+        rodent_id: inserted_id.to_hex(),
+        name: created_rodent.name.clone(),
+        species: created_rodent.species.as_str().to_string(),
+        gender: format!("{:?}", created_rodent.gender),
+        date_of_birth: created_rodent.date_of_birth,
+        intake_date: created_rodent.intake_date,
+        status: created_rodent.status.as_str().to_string(),
+        registered_by: auth_info.user_id.clone(),
+        registered_by_name: auth_info.username.clone(),
+    });
+    if let Err(e) = state.publisher.publish_rodent_registered(&event).await {
+        tracing::warn!("Failed to publish RodentRegistered event: {}", e);
+    }
 
     Ok((
         StatusCode::CREATED,
@@ -336,6 +356,19 @@ pub async fn update_rodent_status(
         .find_one(doc! { "_id": object_id }, None)
         .await?
         .ok_or(AppError::InternalError)?;
+
+    // Publish RodentStatusChanged event
+    let event = RodentStatusChangedEvent::new(RodentStatusChangedPayload {
+        rodent_id: object_id.to_hex(),
+        rodent_name: updated_rodent.name.clone(),
+        old_status: history.old_status.as_str().to_string(),
+        new_status: history.new_status.as_str().to_string(),
+        changed_by: auth_info.user_id.clone(),
+        changed_by_name: auth_info.username.clone(),
+    });
+    if let Err(e) = state.publisher.publish_status_changed(&event).await {
+        tracing::warn!("Failed to publish RodentStatusChanged event: {}", e);
+    }
 
     Ok(Json(SingleRodentResponse {
         success: true,
@@ -722,9 +755,9 @@ pub async fn create_medical_record(
 
     let object_id = ObjectId::parse_str(&rodent_id).map_err(|_| AppError::InvalidRodentId)?;
 
-    // Verify rodent exists
+    // Verify rodent exists and get its name
     let rodent_collection = state.db.db.collection::<Rodent>("rodents");
-    rodent_collection
+    let rodent = rodent_collection
         .find_one(doc! { "_id": object_id }, None)
         .await?
         .ok_or(AppError::RodentNotFound)?;
@@ -755,6 +788,23 @@ pub async fn create_medical_record(
         .find_one(doc! { "_id": inserted_id }, None)
         .await?
         .ok_or(AppError::InternalError)?;
+
+    // Publish MedicalTreatmentAdded event
+    let event = MedicalTreatmentAddedEvent::new(MedicalTreatmentPayload {
+        record_id: inserted_id.to_hex(),
+        rodent_id: rodent_id.clone(),
+        rodent_name: rodent.name.clone(),
+        record_type: created_record.record_type.as_str().to_string(),
+        description: created_record.description.clone(),
+        diagnosis: created_record.diagnosis.clone(),
+        treatment_date: created_record.date,
+        veterinarian_name: created_record.veterinarian_name.clone(),
+        added_by: auth_info.user_id.clone(),
+        added_by_name: auth_info.username.clone(),
+    });
+    if let Err(e) = state.publisher.publish_medical_treatment(&event).await {
+        tracing::warn!("Failed to publish MedicalTreatmentAdded event: {}", e);
+    }
 
     Ok((
         StatusCode::CREATED,
