@@ -13,6 +13,7 @@ use validator::Validate;
 
 use crate::{
     error::AppError,
+    events::{DailyMetricsPayload, DailyMetricsRecordedEvent, FeedingPayload, FeedingRecordedEvent},
     middleware::{can_track_activities, can_view},
     models::*,
     AppState,
@@ -178,6 +179,23 @@ pub async fn create_daily_record(
     let inserted_id = result.inserted_id.as_object_id().ok_or(AppError::InternalError)?;
     let mut created_record = record;
     created_record.id = Some(inserted_id);
+
+    // Publish DailyMetricsRecorded event
+    let event = DailyMetricsRecordedEvent::new(DailyMetricsPayload {
+        record_id: inserted_id.to_hex(),
+        rodent_id: rodent_id.clone(),
+        date,
+        weight_grams: created_record.weight_grams,
+        temperature_celsius: created_record.temperature_celsius,
+        energy_level: created_record.energy_level,
+        mood_level: created_record.mood_level,
+        has_health_observations: created_record.health_observations.is_some(),
+        recorded_by: auth_info.user_id.clone(),
+        recorded_by_name: auth_info.username.clone(),
+    });
+    if let Err(e) = state.publisher.publish_daily_metrics(&event).await {
+        tracing::warn!("Failed to publish DailyMetricsRecorded event: {}", e);
+    }
 
     Ok(Json(SingleDailyRecordResponse {
         success: true,
@@ -484,8 +502,23 @@ pub async fn create_feeding_record(
     let result = collection.insert_one(&record, None).await?;
 
     let inserted_id = result.inserted_id.as_object_id().ok_or(AppError::InternalError)?;
-    let mut created_record = record;
+    let mut created_record = record.clone();
     created_record.id = Some(inserted_id);
+
+    // Publish FeedingRecorded event
+    let event = FeedingRecordedEvent::new(FeedingPayload {
+        record_id: inserted_id.to_hex(),
+        rodent_id: rodent_id.clone(),
+        feeding_time: record.meal_time,
+        food_type: record.food_type.as_str().to_string(),
+        quantity_grams: record.quantity_grams,
+        was_eaten: record.consumed_fully.unwrap_or(true),
+        recorded_by: auth_info.user_id.clone(),
+        recorded_by_name: auth_info.username.clone(),
+    });
+    if let Err(e) = state.publisher.publish_feeding(&event).await {
+        tracing::warn!("Failed to publish FeedingRecorded event: {}", e);
+    }
 
     Ok(Json(SingleFeedingRecordResponse {
         success: true,

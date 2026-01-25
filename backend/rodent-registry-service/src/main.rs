@@ -8,18 +8,22 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 mod config;
 mod db;
 mod error;
+mod events;
 mod handlers;
+mod messaging;
 mod middleware;
 mod models;
 mod routes;
 
 use config::Config;
 use db::MongoDB;
+use messaging::MessagePublisher;
 
 pub struct AppState {
     pub db: MongoDB,
     pub config: Config,
     pub http_client: reqwest::Client,
+    pub publisher: MessagePublisher,
 }
 
 #[tokio::main]
@@ -56,11 +60,17 @@ async fn main() {
         .build()
         .expect("Failed to create HTTP client");
 
+    // Initialize RabbitMQ publisher
+    let publisher = MessagePublisher::new(&config.rabbitmq_url)
+        .await
+        .expect("Failed to create message publisher");
+
     // Create application state
     let state = Arc::new(AppState {
         db,
         config: config.clone(),
         http_client,
+        publisher,
     });
 
     // Build router with middleware

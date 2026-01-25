@@ -8,6 +8,7 @@ pub struct Config {
     pub user_service_url: String,
     pub max_image_size_mb: usize,
     pub jwt_secret: String,
+    pub rabbitmq_url: String,
 }
 
 impl Config {
@@ -29,6 +30,8 @@ impl Config {
                 .expect("MAX_IMAGE_SIZE_MB must be a number"),
             jwt_secret: env::var("JWT_SECRET")
                 .expect("JWT_SECRET must be set"),
+            rabbitmq_url: env::var("RABBITMQ_URL")
+                .unwrap_or_else(|_| "amqp://rodentcare:rodentcare_password@localhost:5672".to_string()),
         }
     }
 }

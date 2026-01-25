@@ -8,6 +8,7 @@ pub struct Config {
     pub jwt_secret: String,
     pub rodent_service_url: String,
     pub activity_service_url: String,
+    pub rabbitmq_url: String,
 }
 
 impl Config {
@@ -27,6 +28,8 @@ impl Config {
                 .unwrap_or_else(|_| "http://localhost:8002".to_string()),
             activity_service_url: env::var("ACTIVITY_SERVICE_URL")
                 .unwrap_or_else(|_| "http://localhost:8003".to_string()),
+            rabbitmq_url: env::var("RABBITMQ_URL")
+                .unwrap_or_else(|_| "amqp://rodentcare:rodentcare_password@localhost:5672".to_string()),
         }
     }
 }
