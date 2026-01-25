@@ -396,6 +396,78 @@ pub async fn get_health_analytics(
     
     let health_observations_count = daily_records.count_documents(health_obs_match, None).await? as i64;
 
+    // Get recent treatments from medical records (filtered by species via rodent_ids)
+    let medical_records = state.db.rodent_db.collection::<Document>("medical_records");
+    
+    let mut treatment_match = doc! {
+        "date": { "$gte": from_date, "$lte": to_date }
+    };
+    if let Some(ref filter) = build_rodent_filter(&rodent_ids) {
+        treatment_match.extend(filter.clone());
+    }
+    
+    // Recent treatments (last 20)
+    let treatment_pipeline = vec![
+        doc! { "$match": treatment_match.clone() },
+        doc! { "$sort": { "date": -1 } },
+        doc! { "$limit": 20 },
+    ];
+    
+    let mut treatment_cursor = medical_records.aggregate(treatment_pipeline, None).await?;
+    let mut treatment_temp = Vec::new();
+    while let Some(doc) = treatment_cursor.try_next().await? {
+        let id = doc.get_object_id("_id").map(|id| id.to_hex()).unwrap_or_default();
+        let rodent_id = doc.get_object_id("rodent_id").map(|id| id.to_hex()).unwrap_or_default();
+        let record_type = doc.get_str("record_type").unwrap_or("unknown").to_string();
+        let description = doc.get_str("description").unwrap_or("").to_string();
+        let diagnosis = doc.get_str("diagnosis").ok().map(|s| s.to_string());
+        let date = doc.get_datetime("date")
+            .map(|dt| DateTime::<Utc>::from_timestamp(dt.timestamp_millis() / 1000, 0).unwrap_or_default())
+            .unwrap_or_default();
+        let veterinarian_name = doc.get_str("veterinarian_name").unwrap_or("Unknown").to_string();
+        
+        treatment_temp.push((id, rodent_id, record_type, description, diagnosis, date, veterinarian_name));
+    }
+    
+    // Look up rodent names for treatments
+    let treatment_rodent_ids: Vec<String> = treatment_temp.iter().map(|(_, rid, _, _, _, _, _)| rid.clone()).collect();
+    let treatment_names_map = get_rodent_names_by_ids(&state, &treatment_rodent_ids).await?;
+    
+    let recent_treatments: Vec<RecentTreatment> = treatment_temp
+        .into_iter()
+        .map(|(id, rodent_id, record_type, description, diagnosis, date, veterinarian_name)| {
+            let rodent_name = treatment_names_map.get(&rodent_id)
+                .cloned()
+                .unwrap_or_else(|| format!("Rodent {}", &rodent_id[..8.min(rodent_id.len())]));
+            RecentTreatment {
+                id,
+                rodent_id,
+                rodent_name,
+                record_type,
+                description,
+                diagnosis,
+                date,
+                veterinarian_name,
+            }
+        })
+        .collect();
+    
+    // Treatments by type
+    let type_pipeline = vec![
+        doc! { "$match": treatment_match },
+        doc! { "$group": { "_id": "$record_type", "count": { "$sum": 1 } } },
+        doc! { "$sort": { "count": -1 } },
+    ];
+    
+    let mut type_cursor = medical_records.aggregate(type_pipeline, None).await?;
+    let mut treatments_by_type = Vec::new();
+    while let Some(doc) = type_cursor.try_next().await? {
+        treatments_by_type.push(TreatmentTypeCount {
+            record_type: doc.get_str("_id").unwrap_or("unknown").to_string(),
+            count: get_number_as_i64(&doc, "count"),
+        });
+    }
+
     Ok(Json(HealthAnalyticsResponse {
         success: true,
         weight_trends,
@@ -403,6 +475,8 @@ pub async fn get_health_analytics(
         energy_level_distribution,
         mood_level_distribution,
         health_observations_count,
+        recent_treatments,
+        treatments_by_type,
     }))
 }
 

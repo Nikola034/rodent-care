@@ -135,6 +135,26 @@ pub struct HealthAnalyticsResponse {
     pub energy_level_distribution: Vec<LevelDistribution>,
     pub mood_level_distribution: Vec<LevelDistribution>,
     pub health_observations_count: i64,
+    pub recent_treatments: Vec<RecentTreatment>,
+    pub treatments_by_type: Vec<TreatmentTypeCount>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct RecentTreatment {
+    pub id: String,
+    pub rodent_id: String,
+    pub rodent_name: String,
+    pub record_type: String,
+    pub description: String,
+    pub diagnosis: Option<String>,
+    pub date: DateTime<Utc>,
+    pub veterinarian_name: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct TreatmentTypeCount {
+    pub record_type: String,
+    pub count: i64,
 }
 
 #[derive(Debug, Serialize)]
