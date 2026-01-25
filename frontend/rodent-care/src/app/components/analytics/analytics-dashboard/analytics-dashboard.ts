@@ -96,6 +96,10 @@ export class AnalyticsDashboard implements OnInit, OnDestroy {
   ];
   selectedPeriod = 30;
 
+  // Species filter
+  speciesOptions: { label: string; value: string }[] = [];
+  selectedSpecies: string | null = null;
+
   private destroy$ = new Subject<void>();
 
   constructor(
@@ -218,11 +222,18 @@ export class AnalyticsDashboard implements OnInit, OnDestroy {
       params.from_date = this.dateRange[0].toISOString();
       params.to_date = this.dateRange[1].toISOString();
     }
+    if (this.selectedSpecies) {
+      params.species = this.selectedSpecies;
+    }
     return params;
   }
 
   onPeriodChange(): void {
     this.initDateRange();
+    this.loadAllData();
+  }
+
+  onSpeciesChange(): void {
     this.loadAllData();
   }
 
@@ -233,6 +244,7 @@ export class AnalyticsDashboard implements OnInit, OnDestroy {
   }
 
   private updateCharts(): void {
+    this.updateSpeciesOptions();
     this.updateSpeciesChart();
     this.updateGenderChart();
     this.updateStatusChart();
@@ -240,6 +252,18 @@ export class AnalyticsDashboard implements OnInit, OnDestroy {
     this.updateFeedingTypeChart();
     this.updateTrendCharts();
     this.updateHourlyCharts();
+  }
+
+  private updateSpeciesOptions(): void {
+    if (!this.populationStats) return;
+    
+    this.speciesOptions = [
+      { label: 'All Species', value: '' },
+      ...this.populationStats.by_species.map(s => ({
+        label: this.formatSpeciesLabel(s.species),
+        value: s.species
+      }))
+    ];
   }
 
   private updateSpeciesChart(): void {
@@ -514,6 +538,6 @@ export class AnalyticsDashboard implements OnInit, OnDestroy {
 
   canViewAnalytics(): boolean {
     const role = this.authService.getCurrentUser()?.role;
-    return role === 'admin' || role === 'caretaker' || role === 'veterinarian';
+    return role === 'Admin' || role === 'Caretaker' || role === 'Veterinarian';
   }
 }

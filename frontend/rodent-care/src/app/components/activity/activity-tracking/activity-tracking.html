@@ -195,7 +195,7 @@
                     </div>
                   </div>
                   <div class="flex align-items-center gap-2">
-                    <span class="text-color-secondary text-sm">{{ activity.recorded_at | date:'shortTime' }}</span>
+                    <span class="text-color-secondary text-sm">{{ activity.recorded_at | date:'shortTime':'UTC' }}</span>
                     @if (canTrackActivities()) {
                       <p-button icon="pi pi-trash" [rounded]="true" [text]="true" severity="danger"
                         (onClick)="confirmDeleteActivity(activity)" pTooltip="Delete"></p-button>
@@ -247,7 +247,7 @@
                     </div>
                   </div>
                   <div class="flex align-items-center gap-2">
-                    <span class="text-color-secondary text-sm">{{ record.meal_time | date:'shortTime' }}</span>
+                    <span class="text-color-secondary text-sm">{{ record.meal_time | date:'shortTime':'UTC' }}</span>
                     @if (canTrackActivities()) {
                       <p-button icon="pi pi-pencil" [rounded]="true" [text]="true"
                         (onClick)="openEditFeedingDialog(record)" pTooltip="Edit"></p-button>

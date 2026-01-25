@@ -226,6 +226,13 @@ pub struct FeedingQueryParams {
     pub limit: Option<u32>,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct DailySummaryQueryParams {
+    /// Timezone offset in minutes (e.g., -60 for UTC+1, 60 for UTC-1)
+    /// JavaScript's getTimezoneOffset() returns positive for west of UTC
+    pub tz_offset: Option<i32>,
+}
+
 // ============== Response DTOs ==============
 
 #[derive(Debug, Serialize)]

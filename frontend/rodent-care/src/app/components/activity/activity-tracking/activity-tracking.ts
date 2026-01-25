@@ -189,8 +189,10 @@ export class ActivityTracking implements OnInit, OnDestroy {
 
     this.isLoadingSummary = true;
     const dateStr = this.formatDateForApi(this.selectedDate);
+    // Get timezone offset in minutes (negative for east of UTC, e.g., UTC+1 = -60)
+    const tzOffset = new Date().getTimezoneOffset();
 
-    this.activityService.getDailySummary(this.rodentId, dateStr)
+    this.activityService.getDailySummary(this.rodentId, dateStr, tzOffset)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (response) => {
@@ -349,9 +351,14 @@ export class ActivityTracking implements OnInit, OnDestroy {
   // ==================== Activities ====================
 
   openActivityDialog(): void {
+    // Use selected date with current time for the recorded_at field
+    const recordedAt = new Date(this.selectedDate);
+    const now = new Date();
+    recordedAt.setHours(now.getHours(), now.getMinutes(), now.getSeconds());
+    
     this.activityForm.reset({
       intensity: 5,
-      recorded_at: new Date()
+      recorded_at: recordedAt
     });
     this.showActivityDialog = true;
   }
@@ -370,7 +377,7 @@ export class ActivityTracking implements OnInit, OnDestroy {
       duration_minutes: formValue.duration_minutes,
       intensity: formValue.intensity || null,
       notes: formValue.notes?.trim() || null,
-      recorded_at: formValue.recorded_at?.toISOString() || null
+      recorded_at: formValue.recorded_at ? this.formatDateTimeLocal(formValue.recorded_at) : null
     };
 
     this.activityService.createActivity(this.rodentId, request)
@@ -442,8 +449,14 @@ export class ActivityTracking implements OnInit, OnDestroy {
   openFeedingDialog(): void {
     this.isEditingFeeding = false;
     this.editingFeedingId = null;
+    
+    // Use selected date with current time for the meal_time field
+    const mealTime = new Date(this.selectedDate);
+    const now = new Date();
+    mealTime.setHours(now.getHours(), now.getMinutes(), now.getSeconds());
+    
     this.feedingForm.reset({
-      meal_time: new Date()
+      meal_time: mealTime
     });
     this.showFeedingDialog = true;
   }
@@ -475,7 +488,7 @@ export class ActivityTracking implements OnInit, OnDestroy {
       const request: UpdateFeedingRecordRequest = {
         food_type: formValue.food_type,
         quantity_grams: formValue.quantity_grams,
-        meal_time: formValue.meal_time?.toISOString(),
+        meal_time: formValue.meal_time ? this.formatDateTimeLocal(formValue.meal_time) : undefined,
         notes: formValue.notes?.trim() || null
       };
 
@@ -507,7 +520,7 @@ export class ActivityTracking implements OnInit, OnDestroy {
       const request: CreateFeedingRecordRequest = {
         food_type: formValue.food_type,
         quantity_grams: formValue.quantity_grams,
-        meal_time: formValue.meal_time?.toISOString() || null,
+        meal_time: formValue.meal_time ? this.formatDateTimeLocal(formValue.meal_time) : null,
         notes: formValue.notes?.trim() || null,
         consumed_fully: formValue.consumed_fully ?? null
       };
@@ -580,7 +593,32 @@ export class ActivityTracking implements OnInit, OnDestroy {
   // ==================== Helpers ====================
 
   private formatDateForApi(date: Date): string {
-    return date.toISOString().split('T')[0];
+    // Use local date components to avoid UTC conversion shifting the date
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
+  /**
+   * Format date as ISO string but preserving local timezone.
+   * This prevents the date from shifting when converting to UTC.
+   */
+  private formatDateTimeLocal(date: Date): string {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    const seconds = String(date.getSeconds()).padStart(2, '0');
+    
+    // Return in ISO format with timezone offset
+    const offset = -date.getTimezoneOffset();
+    const offsetHours = String(Math.floor(Math.abs(offset) / 60)).padStart(2, '0');
+    const offsetMinutes = String(Math.abs(offset) % 60).padStart(2, '0');
+    const offsetSign = offset >= 0 ? '+' : '-';
+    
+    return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}${offsetSign}${offsetHours}:${offsetMinutes}`;
   }
 
   private markFormGroupTouched(formGroup: FormGroup): void {

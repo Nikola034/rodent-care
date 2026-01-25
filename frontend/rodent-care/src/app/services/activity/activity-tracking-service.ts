@@ -262,10 +262,17 @@ export class ActivityTrackingService {
 
   /**
    * Get daily summary for a rodent on a specific date
+   * @param rodentId - The rodent ID
+   * @param date - Date in YYYY-MM-DD format (local date)
+   * @param tzOffset - Timezone offset in minutes (e.g., -60 for UTC+1)
    */
-  getDailySummary(rodentId: string, date: string): Observable<DailySummaryResponse> {
+  getDailySummary(rodentId: string, date: string, tzOffset?: number): Observable<DailySummaryResponse> {
+    let params = new HttpParams();
+    if (tzOffset !== undefined) {
+      params = params.set('tz_offset', tzOffset.toString());
+    }
     return this.http
-      .get<DailySummaryResponse>(`${this.baseUrl}/${rodentId}/summary/${date}`)
+      .get<DailySummaryResponse>(`${this.baseUrl}/${rodentId}/summary/${date}`, { params })
       .pipe(
         catchError((error) => {
           console.error('Failed to get daily summary:', error);

@@ -54,12 +54,37 @@ fn get_date_range(from: Option<DateTime<Utc>>, to: Option<DateTime<Utc>>) -> (Da
     (from_date, to_date)
 }
 
+// Helper function to get numeric value from BSON document (handles both i32 and i64)
+fn get_number_as_i64(doc: &Document, key: &str) -> i64 {
+    if let Ok(val) = doc.get_i64(key) {
+        val
+    } else if let Ok(val) = doc.get_i32(key) {
+        val as i64
+    } else if let Ok(val) = doc.get_f64(key) {
+        val as i64
+    } else {
+        0
+    }
+}
+
+fn get_number_as_f64(doc: &Document, key: &str) -> f64 {
+    if let Ok(val) = doc.get_f64(key) {
+        val
+    } else if let Ok(val) = doc.get_i64(key) {
+        val as f64
+    } else if let Ok(val) = doc.get_i32(key) {
+        val as f64
+    } else {
+        0.0
+    }
+}
+
 // ============== Population Analytics ==============
 
 pub async fn get_population_stats(
     State(state): State<Arc<AppState>>,
     headers: HeaderMap,
-    Query(_params): Query<AnalyticsQueryParams>,
+    Query(params): Query<AnalyticsQueryParams>,
 ) -> Result<Json<PopulationStatsResponse>, AppError> {
     let auth_info = extract_auth_info(&state, &headers)?;
 
@@ -69,19 +94,28 @@ pub async fn get_population_stats(
 
     let rodents_collection = state.db.rodent_db.collection::<Document>("rodents");
 
-    // Total count
-    let total_rodents = rodents_collection.count_documents(doc! {}, None).await?;
+    // Build base filter
+    let base_filter = if let Some(species) = &params.species {
+        doc! { "species": species }
+    } else {
+        doc! {}
+    };
+
+    // Total count (with filter)
+    let total_rodents = rodents_collection.count_documents(base_filter.clone(), None).await?;
 
     // By species
-    let species_pipeline = vec![
-        doc! { "$group": { "_id": "$species", "count": { "$sum": 1 } } },
-        doc! { "$sort": { "count": -1 } },
-    ];
+    let mut species_pipeline = vec![];
+    if let Some(species) = &params.species {
+        species_pipeline.push(doc! { "$match": { "species": species } });
+    }
+    species_pipeline.push(doc! { "$group": { "_id": "$species", "count": { "$sum": 1 } } });
+    species_pipeline.push(doc! { "$sort": { "count": -1 } });
     let mut species_cursor = rodents_collection.aggregate(species_pipeline, None).await?;
     let mut by_species = Vec::new();
     while let Some(doc) = species_cursor.try_next().await? {
         let species = doc.get_str("_id").unwrap_or("unknown").to_string();
-        let count = doc.get_i64("count").unwrap_or(0);
+        let count = get_number_as_i64(&doc, "count");
         let percentage = if total_rodents > 0 {
             (count as f64 / total_rodents as f64) * 100.0
         } else {
@@ -91,14 +125,16 @@ pub async fn get_population_stats(
     }
 
     // By gender
-    let gender_pipeline = vec![
-        doc! { "$group": { "_id": "$gender", "count": { "$sum": 1 } } },
-    ];
+    let mut gender_pipeline = vec![];
+    if let Some(species) = &params.species {
+        gender_pipeline.push(doc! { "$match": { "species": species } });
+    }
+    gender_pipeline.push(doc! { "$group": { "_id": "$gender", "count": { "$sum": 1 } } });
     let mut gender_cursor = rodents_collection.aggregate(gender_pipeline, None).await?;
     let mut by_gender = GenderDistribution { male: 0, female: 0, unknown: 0 };
     while let Some(doc) = gender_cursor.try_next().await? {
         let gender = doc.get_str("_id").unwrap_or("unknown");
-        let count = doc.get_i64("count").unwrap_or(0);
+        let count = get_number_as_i64(&doc, "count");
         match gender {
             "male" => by_gender.male = count,
             "female" => by_gender.female = count,
@@ -107,35 +143,39 @@ pub async fn get_population_stats(
     }
 
     // By status
-    let status_pipeline = vec![
-        doc! { "$group": { "_id": "$status", "count": { "$sum": 1 } } },
-        doc! { "$sort": { "count": -1 } },
-    ];
+    let mut status_pipeline = vec![];
+    if let Some(species) = &params.species {
+        status_pipeline.push(doc! { "$match": { "species": species } });
+    }
+    status_pipeline.push(doc! { "$group": { "_id": "$status", "count": { "$sum": 1 } } });
+    status_pipeline.push(doc! { "$sort": { "count": -1 } });
     let mut status_cursor = rodents_collection.aggregate(status_pipeline, None).await?;
     let mut by_status = Vec::new();
     while let Some(doc) = status_cursor.try_next().await? {
         let status = doc.get_str("_id").unwrap_or("unknown").to_string();
-        let count = doc.get_i64("count").unwrap_or(0);
+        let count = get_number_as_i64(&doc, "count");
         by_status.push(StatusCount { status, count });
     }
 
     // By age group
-    let age_pipeline = vec![
-        doc! {
-            "$bucket": {
-                "groupBy": "$age_months",
-                "boundaries": [0, 3, 6, 12, 24, 100],
-                "default": "unknown",
-                "output": { "count": { "$sum": 1 } }
-            }
-        },
-    ];
+    let mut age_pipeline = vec![];
+    if let Some(species) = &params.species {
+        age_pipeline.push(doc! { "$match": { "species": species } });
+    }
+    age_pipeline.push(doc! {
+        "$bucket": {
+            "groupBy": "$age_months",
+            "boundaries": [0, 3, 6, 12, 24, 100],
+            "default": "unknown",
+            "output": { "count": { "$sum": 1 } }
+        }
+    });
     let mut age_cursor = rodents_collection.aggregate(age_pipeline, None).await?;
     let mut by_age_group = Vec::new();
     let age_labels = ["0-3 months", "3-6 months", "6-12 months", "1-2 years", "2+ years"];
     let mut idx = 0;
     while let Some(doc) = age_cursor.try_next().await? {
-        let count = doc.get_i64("count").unwrap_or(0);
+        let count = get_number_as_i64(&doc, "count");
         let age_group = age_labels.get(idx).unwrap_or(&"unknown").to_string();
         by_age_group.push(AgeGroupCount { age_group, count });
         idx += 1;
@@ -143,9 +183,11 @@ pub async fn get_population_stats(
 
     // Recent intakes (last 30 days)
     let thirty_days_ago = Utc::now() - Duration::days(30);
-    let recent_intakes = rodents_collection.count_documents(doc! {
-        "intake_date": { "$gte": thirty_days_ago }
-    }, None).await?;
+    let mut intake_filter = doc! { "intake_date": { "$gte": thirty_days_ago } };
+    if let Some(species) = &params.species {
+        intake_filter.insert("species", species);
+    }
+    let recent_intakes = rodents_collection.count_documents(intake_filter, None).await?;
 
     // Recent adoptions (last 30 days)
     let status_history = state.db.rodent_db.collection::<Document>("status_history");
@@ -217,10 +259,10 @@ pub async fn get_health_analytics(
     while let Some(doc) = weight_cursor.try_next().await? {
         weight_trends.push(WeightTrendData {
             date: doc.get_str("_id").unwrap_or("").to_string(),
-            avg_weight: doc.get_f64("avg_weight").unwrap_or(0.0),
-            min_weight: doc.get_f64("min_weight").unwrap_or(0.0),
-            max_weight: doc.get_f64("max_weight").unwrap_or(0.0),
-            rodent_count: doc.get_i64("rodent_count").unwrap_or(0),
+            avg_weight: get_number_as_f64(&doc, "avg_weight"),
+            min_weight: get_number_as_f64(&doc, "min_weight"),
+            max_weight: get_number_as_f64(&doc, "max_weight"),
+            rodent_count: get_number_as_i64(&doc, "rodent_count"),
         });
     }
 
@@ -248,8 +290,8 @@ pub async fn get_health_analytics(
     let mut energy_level_distribution = Vec::new();
     while let Some(doc) = energy_cursor.try_next().await? {
         energy_level_distribution.push(LevelDistribution {
-            level: doc.get_i32("_id").unwrap_or(0),
-            count: doc.get_i64("count").unwrap_or(0),
+            level: get_number_as_i64(&doc, "_id") as i32,
+            count: get_number_as_i64(&doc, "count"),
         });
     }
 
@@ -274,8 +316,8 @@ pub async fn get_health_analytics(
     let mut mood_level_distribution = Vec::new();
     while let Some(doc) = mood_cursor.try_next().await? {
         mood_level_distribution.push(LevelDistribution {
-            level: doc.get_i32("_id").unwrap_or(0),
-            count: doc.get_i64("count").unwrap_or(0),
+            level: get_number_as_i64(&doc, "_id") as i32,
+            count: get_number_as_i64(&doc, "count"),
         });
     }
 
@@ -320,7 +362,7 @@ pub async fn get_activity_analytics(
 
     let mut total_cursor = activities.aggregate(total_pipeline, None).await?;
     let (total_activity_minutes, _total_sessions) = if let Some(doc) = total_cursor.try_next().await? {
-        (doc.get_i64("total_minutes").unwrap_or(0), doc.get_i64("session_count").unwrap_or(0))
+        (get_number_as_i64(&doc, "total_minutes"), get_number_as_i64(&doc, "session_count"))
     } else {
         (0, 0)
     };
@@ -338,8 +380,8 @@ pub async fn get_activity_analytics(
     let mut type_cursor = activities.aggregate(type_pipeline, None).await?;
     let mut by_activity_type = Vec::new();
     while let Some(doc) = type_cursor.try_next().await? {
-        let total_minutes = doc.get_i64("total_minutes").unwrap_or(0);
-        let session_count = doc.get_i64("session_count").unwrap_or(0);
+        let total_minutes = get_number_as_i64(&doc, "total_minutes");
+        let session_count = get_number_as_i64(&doc, "session_count");
         by_activity_type.push(ActivityTypeStats {
             activity_type: doc.get_str("_id").unwrap_or("unknown").to_string(),
             total_minutes,
@@ -359,9 +401,9 @@ pub async fn get_activity_analytics(
     let mut activity_by_hour = Vec::new();
     while let Some(doc) = hour_cursor.try_next().await? {
         activity_by_hour.push(HourlyActivity {
-            hour: doc.get_i32("_id").unwrap_or(0),
-            total_minutes: doc.get_i64("total_minutes").unwrap_or(0),
-            session_count: doc.get_i64("session_count").unwrap_or(0),
+            hour: get_number_as_i64(&doc, "_id") as i32,
+            total_minutes: get_number_as_i64(&doc, "total_minutes"),
+            session_count: get_number_as_i64(&doc, "session_count"),
         });
     }
 
@@ -376,11 +418,11 @@ pub async fn get_activity_analytics(
     let mut activity_by_day_of_week = Vec::new();
     let day_names = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
     while let Some(doc) = day_cursor.try_next().await? {
-        let day_num = doc.get_i32("_id").unwrap_or(1) as usize;
+        let day_num = get_number_as_i64(&doc, "_id") as usize;
         activity_by_day_of_week.push(DayOfWeekActivity {
             day: day_names.get(day_num.saturating_sub(1)).unwrap_or(&"Unknown").to_string(),
-            total_minutes: doc.get_i64("total_minutes").unwrap_or(0),
-            session_count: doc.get_i64("session_count").unwrap_or(0),
+            total_minutes: get_number_as_i64(&doc, "total_minutes"),
+            session_count: get_number_as_i64(&doc, "session_count"),
         });
     }
 
@@ -399,8 +441,8 @@ pub async fn get_activity_analytics(
         most_active_rodents.push(RodentActivityStats {
             rodent_id: rodent_id.clone(),
             rodent_name: format!("Rodent {}", &rodent_id[..8.min(rodent_id.len())]),
-            total_minutes: doc.get_i64("total_minutes").unwrap_or(0),
-            session_count: doc.get_i64("session_count").unwrap_or(0),
+            total_minutes: get_number_as_i64(&doc, "total_minutes"),
+            session_count: get_number_as_i64(&doc, "session_count"),
         });
     }
 
@@ -440,7 +482,7 @@ pub async fn get_feeding_analytics(
 
     let mut total_cursor = feeding_records.aggregate(total_pipeline, None).await?;
     let (total_food_grams, feeding_count, consumed_fully_count) = if let Some(doc) = total_cursor.try_next().await? {
-        (doc.get_f64("total_grams").unwrap_or(0.0), doc.get_i64("feeding_count").unwrap_or(0), doc.get_i64("consumed_fully_count").unwrap_or(0))
+        (get_number_as_f64(&doc, "total_grams"), get_number_as_i64(&doc, "feeding_count"), get_number_as_i64(&doc, "consumed_fully_count"))
     } else {
         (0.0, 0, 0)
     };
@@ -459,8 +501,8 @@ pub async fn get_feeding_analytics(
     let mut type_cursor = feeding_records.aggregate(type_pipeline, None).await?;
     let mut by_food_type = Vec::new();
     while let Some(doc) = type_cursor.try_next().await? {
-        let total_grams = doc.get_f64("total_grams").unwrap_or(0.0);
-        let feeding_count = doc.get_i64("feeding_count").unwrap_or(0);
+        let total_grams = get_number_as_f64(&doc, "total_grams");
+        let feeding_count = get_number_as_i64(&doc, "feeding_count");
         by_food_type.push(FoodTypeStats {
             food_type: doc.get_str("_id").unwrap_or("unknown").to_string(),
             total_grams,
@@ -480,9 +522,9 @@ pub async fn get_feeding_analytics(
     let mut feeding_by_hour = Vec::new();
     while let Some(doc) = hour_cursor.try_next().await? {
         feeding_by_hour.push(HourlyFeeding {
-            hour: doc.get_i32("_id").unwrap_or(0),
-            total_grams: doc.get_f64("total_grams").unwrap_or(0.0),
-            feeding_count: doc.get_i64("feeding_count").unwrap_or(0),
+            hour: get_number_as_i64(&doc, "_id") as i32,
+            total_grams: get_number_as_f64(&doc, "total_grams"),
+            feeding_count: get_number_as_i64(&doc, "feeding_count"),
         });
     }
 
@@ -501,8 +543,8 @@ pub async fn get_feeding_analytics(
         top_consumers.push(RodentFeedingStats {
             rodent_id: rodent_id.clone(),
             rodent_name: format!("Rodent {}", &rodent_id[..8.min(rodent_id.len())]),
-            total_grams: doc.get_f64("total_grams").unwrap_or(0.0),
-            feeding_count: doc.get_i64("feeding_count").unwrap_or(0),
+            total_grams: get_number_as_f64(&doc, "total_grams"),
+            feeding_count: get_number_as_i64(&doc, "feeding_count"),
         });
     }
 
@@ -552,7 +594,7 @@ pub async fn get_dashboard_summary(
     let mut today_cursor = activities.aggregate(today_activity_pipeline, None).await?;
     let (total_minutes_today, active_rodents_today) = if let Some(doc) = today_cursor.try_next().await? {
         let rodent_ids = doc.get_array("rodent_ids").map(|a| a.len()).unwrap_or(0);
-        (doc.get_i64("total_minutes").unwrap_or(0), rodent_ids as i64)
+        (get_number_as_i64(&doc, "total_minutes"), rodent_ids as i64)
     } else {
         (0, 0)
     };
@@ -563,7 +605,7 @@ pub async fn get_dashboard_summary(
     ];
     let mut week_cursor = activities.aggregate(week_activity_pipeline, None).await?;
     let total_minutes_week = if let Some(doc) = week_cursor.try_next().await? {
-        doc.get_i64("total_minutes").unwrap_or(0)
+        get_number_as_i64(&doc, "total_minutes")
     } else {
         0
     };
@@ -590,7 +632,7 @@ pub async fn get_dashboard_summary(
     ];
     let mut today_feeding_cursor = feeding_records.aggregate(today_feeding_pipeline, None).await?;
     let (total_grams_today, feedings_today) = if let Some(doc) = today_feeding_cursor.try_next().await? {
-        (doc.get_f64("total_grams").unwrap_or(0.0), doc.get_i64("count").unwrap_or(0))
+        (get_number_as_f64(&doc, "total_grams"), get_number_as_i64(&doc, "count"))
     } else {
         (0.0, 0)
     };
@@ -601,7 +643,7 @@ pub async fn get_dashboard_summary(
     ];
     let mut week_feeding_cursor = feeding_records.aggregate(week_feeding_pipeline, None).await?;
     let (total_grams_week, feedings_week) = if let Some(doc) = week_feeding_cursor.try_next().await? {
-        (doc.get_f64("total_grams").unwrap_or(0.0), doc.get_i64("count").unwrap_or(0))
+        (get_number_as_f64(&doc, "total_grams"), get_number_as_i64(&doc, "count"))
     } else {
         (0.0, 0)
     };
@@ -660,8 +702,8 @@ pub async fn get_weight_trends(
     while let Some(doc) = cursor.try_next().await? {
         data_points.push(TrendDataPoint {
             date: doc.get_str("_id").unwrap_or("").to_string(),
-            value: doc.get_f64("value").unwrap_or(0.0),
-            count: doc.get_i64("count").unwrap_or(0),
+            value: get_number_as_f64(&doc, "value"),
+            count: get_number_as_i64(&doc, "count"),
         });
     }
 
@@ -698,8 +740,8 @@ pub async fn get_activity_trends(
     while let Some(doc) = cursor.try_next().await? {
         data_points.push(TrendDataPoint {
             date: doc.get_str("_id").unwrap_or("").to_string(),
-            value: doc.get_i64("value").unwrap_or(0) as f64,
-            count: doc.get_i64("count").unwrap_or(0),
+            value: get_number_as_f64(&doc, "value"),
+            count: get_number_as_i64(&doc, "count"),
         });
     }
 
@@ -736,8 +778,8 @@ pub async fn get_feeding_trends(
     while let Some(doc) = cursor.try_next().await? {
         data_points.push(TrendDataPoint {
             date: doc.get_str("_id").unwrap_or("").to_string(),
-            value: doc.get_f64("value").unwrap_or(0.0),
-            count: doc.get_i64("count").unwrap_or(0),
+            value: get_number_as_f64(&doc, "value"),
+            count: get_number_as_i64(&doc, "count"),
         });
     }
 
