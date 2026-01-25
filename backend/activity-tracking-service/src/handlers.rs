@@ -577,6 +577,7 @@ pub async fn delete_feeding_record(
 pub async fn get_daily_summary(
     State(state): State<Arc<AppState>>,
     Path((rodent_id, date_str)): Path<(String, String)>,
+    Query(params): Query<DailySummaryQueryParams>,
     headers: HeaderMap,
 ) -> Result<Json<DailySummaryResponse>, AppError> {
     let auth_info = extract_auth_info(&state, &headers)?;
@@ -588,8 +589,20 @@ pub async fn get_daily_summary(
     let date = chrono::NaiveDate::parse_from_str(&date_str, "%Y-%m-%d")
         .map_err(|_| AppError::ValidationError("Invalid date format. Use YYYY-MM-DD".to_string()))?;
 
-    let start_of_day = Utc.from_utc_datetime(&date.and_hms_opt(0, 0, 0).unwrap());
-    let end_of_day = Utc.from_utc_datetime(&date.and_hms_opt(23, 59, 59).unwrap());
+    // Calculate the start and end of day in UTC, accounting for timezone offset
+    // JavaScript's getTimezoneOffset() returns minutes: positive for west of UTC, negative for east
+    // For UTC+1, offset is -60, so local midnight = UTC midnight + 60 minutes = 01:00 UTC previous day
+    // To get UTC time from local time: UTC = local + offset
+    // So for local midnight at UTC+1: UTC = 00:00 + (-60min) = 23:00 previous day UTC
+    let tz_offset_minutes = params.tz_offset.unwrap_or(0);
+    let offset_duration = chrono::Duration::minutes(tz_offset_minutes as i64);
+    
+    let local_start = date.and_hms_opt(0, 0, 0).unwrap();
+    let local_end = date.and_hms_opt(23, 59, 59).unwrap();
+    
+    // Convert local time to UTC by adding the offset
+    let start_of_day = Utc.from_utc_datetime(&local_start) + offset_duration;
+    let end_of_day = Utc.from_utc_datetime(&local_end) + offset_duration;
 
     // Get daily record
     let daily_collection = state.db.db.collection::<DailyRecord>("daily_records");

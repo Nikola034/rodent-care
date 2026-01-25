@@ -57,6 +57,11 @@ export const routes: Routes = [
         path: 'profile',
         loadComponent: () => import('./components/profile/profile').then(m => m.Profile)
       },
+      // Analytics route (accessible by admin, caretaker, veterinarian)
+      {
+        path: 'analytics',
+        loadComponent: () => import('./components/analytics/analytics-dashboard/analytics-dashboard').then(m => m.AnalyticsDashboard)
+      },
       // Admin routes
       {
         path: 'users',

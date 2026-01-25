@@ -4,6 +4,7 @@ members = [
     "api-gateway",
     "rodent-registry-service",
     "activity-tracking-service",
+    "analytics-service",
 ]
 
 resolver = "2"
