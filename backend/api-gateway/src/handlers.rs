@@ -65,13 +65,21 @@ pub async fn services_health(State(state): State<Arc<AppState>>) -> impl IntoRes
         .map(|r| r.status().is_success())
         .unwrap_or(false);
 
+    let analytics_service_health = state
+        .http_client
+        .get(format!("{}/api/analytics/service-health", state.config.analytics_service_url))
+        .send()
+        .await
+        .map(|r| r.status().is_success())
+        .unwrap_or(false);
+
     Json(json!({
         "success": true,
         "services": {
             "user_service": user_service_health,
             "rodent_registry_service": rodent_registry_health,
             "activity_tracking_service": activity_tracking_health,
-            "analytics_service": false // Not implemented yet
+            "analytics_service": analytics_service_health
         }
     }))
 }
@@ -146,9 +154,11 @@ pub fn create_routes(state: Arc<AppState>) -> Router<Arc<AppState>> {
         .route("/activities/*path", any(proxy_to_activity_tracking_service))
         .layer(middleware::from_fn_with_state(state.clone(), auth_middleware));
 
+    // Analytics Service routes (protected with authentication)
     let analytics_routes = Router::new()
         .route("/analytics", any(proxy_to_analytics_service))
-        .route("/analytics/*path", any(proxy_to_analytics_service));
+        .route("/analytics/*path", any(proxy_to_analytics_service))
+        .layer(middleware::from_fn_with_state(state.clone(), auth_middleware));
 
     // Combine all routes with rate limiting
     Router::new()

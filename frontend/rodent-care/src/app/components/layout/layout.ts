@@ -77,6 +77,15 @@ export class Layout implements OnInit, OnDestroy {
       }
     ];
 
+    // Add analytics menu for admin, caretaker, and veterinarian
+    if (this.authService.isAdmin() || this.authService.isCaretaker() || this.authService.isVeterinarian()) {
+      this.menuItems.push({
+        label: 'Analytics',
+        icon: 'pi pi-chart-bar',
+        routerLink: '/app/analytics'
+      });
+    }
+
     // Add admin menu if user is admin
     if (this.authService.isAdmin()) {
       this.menuItems.push({
