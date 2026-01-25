@@ -1,7 +1,7 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { Subject, forkJoin, takeUntil } from 'rxjs';
+import { Subject, forkJoin, takeUntil, debounceTime } from 'rxjs';
 
 // PrimeNG Imports
 import { CardModule } from 'primeng/card';
@@ -101,6 +101,7 @@ export class AnalyticsDashboard implements OnInit, OnDestroy {
   selectedSpecies: string | null = null;
 
   private destroy$ = new Subject<void>();
+  private filterChange$ = new Subject<void>();
 
   constructor(
     private analyticsService: AnalyticsService,
@@ -109,6 +110,11 @@ export class AnalyticsDashboard implements OnInit, OnDestroy {
   ) {
     this.initChartOptions();
     this.initDateRange();
+    
+    // Debounce filter changes to prevent rate limiting
+    this.filterChange$
+      .pipe(debounceTime(300), takeUntil(this.destroy$))
+      .subscribe(() => this.loadAllData());
   }
 
   ngOnInit(): void {
@@ -230,16 +236,16 @@ export class AnalyticsDashboard implements OnInit, OnDestroy {
 
   onPeriodChange(): void {
     this.initDateRange();
-    this.loadAllData();
+    this.filterChange$.next();
   }
 
   onSpeciesChange(): void {
-    this.loadAllData();
+    this.filterChange$.next();
   }
 
   onDateRangeChange(): void {
     if (this.dateRange.length === 2 && this.dateRange[0] && this.dateRange[1]) {
-      this.loadAllData();
+      this.filterChange$.next();
     }
   }
 

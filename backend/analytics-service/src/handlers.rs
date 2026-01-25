@@ -79,6 +79,70 @@ fn get_number_as_f64(doc: &Document, key: &str) -> f64 {
     }
 }
 
+/// Helper function to get rodent ObjectIds filtered by species
+/// Returns None if no species filter is applied (meaning all rodents)
+async fn get_rodent_ids_by_species(
+    state: &AppState,
+    species: Option<&String>,
+) -> Result<Option<Vec<bson::oid::ObjectId>>, AppError> {
+    match species {
+        Some(species_filter) if !species_filter.is_empty() => {
+            let rodents_collection = state.db.rodent_db.collection::<Document>("rodents");
+            let cursor = rodents_collection
+                .find(doc! { "species": species_filter }, None)
+                .await?;
+            let rodents: Vec<Document> = cursor.try_collect().await?;
+            let ids: Vec<bson::oid::ObjectId> = rodents
+                .iter()
+                .filter_map(|doc| doc.get_object_id("_id").ok())
+                .collect();
+            Ok(Some(ids))
+        }
+        _ => Ok(None), // No filter - return None to indicate all rodents
+    }
+}
+
+/// Build a match document that includes rodent_id filter if species is specified
+fn build_rodent_filter(rodent_ids: &Option<Vec<bson::oid::ObjectId>>) -> Option<Document> {
+    rodent_ids.as_ref().map(|ids| {
+        doc! { "rodent_id": { "$in": ids } }
+    })
+}
+
+/// Helper function to get rodent names by their IDs
+/// Returns a HashMap mapping rodent ID (hex string) to name
+async fn get_rodent_names_by_ids(
+    state: &AppState,
+    rodent_ids: &[String],
+) -> Result<std::collections::HashMap<String, String>, AppError> {
+    use std::collections::HashMap;
+    
+    if rodent_ids.is_empty() {
+        return Ok(HashMap::new());
+    }
+    
+    // Convert string IDs to ObjectIds
+    let object_ids: Vec<bson::oid::ObjectId> = rodent_ids
+        .iter()
+        .filter_map(|id| bson::oid::ObjectId::parse_str(id).ok())
+        .collect();
+    
+    let rodents_collection = state.db.rodent_db.collection::<Document>("rodents");
+    let cursor = rodents_collection
+        .find(doc! { "_id": { "$in": &object_ids } }, None)
+        .await?;
+    let rodents: Vec<Document> = cursor.try_collect().await?;
+    
+    let mut names_map = HashMap::new();
+    for rodent in rodents {
+        if let (Ok(id), Ok(name)) = (rodent.get_object_id("_id"), rodent.get_str("name")) {
+            names_map.insert(id.to_hex(), name.to_string());
+        }
+    }
+    
+    Ok(names_map)
+}
+
 // ============== Population Analytics ==============
 
 pub async fn get_population_stats(
@@ -223,16 +287,25 @@ pub async fn get_health_analytics(
 
     let (from_date, to_date) = get_date_range(params.from_date, params.to_date);
 
+    // Get rodent IDs filtered by species if specified
+    let rodent_ids = get_rodent_ids_by_species(&state, params.species.as_ref()).await?;
+    
+    // Build base match filter
+    let mut base_match = doc! {
+        "date": { "$gte": from_date, "$lte": to_date }
+    };
+    if let Some(ref filter) = build_rodent_filter(&rodent_ids) {
+        base_match.extend(filter.clone());
+    }
+
     let daily_records = state.db.activity_db.collection::<Document>("daily_records");
 
     // Weight trends over time
+    let mut weight_match = base_match.clone();
+    weight_match.insert("weight_grams", doc! { "$exists": true, "$ne": null });
+    
     let weight_pipeline = vec![
-        doc! {
-            "$match": {
-                "date": { "$gte": from_date, "$lte": to_date },
-                "weight_grams": { "$exists": true, "$ne": null }
-            }
-        },
+        doc! { "$match": weight_match },
         doc! {
             "$group": {
                 "_id": { "$dateToString": { "format": "%Y-%m-%d", "date": "$date" } },
@@ -270,13 +343,11 @@ pub async fn get_health_analytics(
     let avg_weight_by_species: Vec<SpeciesWeightAvg> = Vec::new();
 
     // Energy level distribution
+    let mut energy_match = base_match.clone();
+    energy_match.insert("energy_level", doc! { "$exists": true, "$ne": null });
+    
     let energy_pipeline = vec![
-        doc! {
-            "$match": {
-                "date": { "$gte": from_date, "$lte": to_date },
-                "energy_level": { "$exists": true, "$ne": null }
-            }
-        },
+        doc! { "$match": energy_match },
         doc! {
             "$group": {
                 "_id": "$energy_level",
@@ -296,13 +367,11 @@ pub async fn get_health_analytics(
     }
 
     // Mood level distribution
+    let mut mood_match = base_match.clone();
+    mood_match.insert("mood_level", doc! { "$exists": true, "$ne": null });
+    
     let mood_pipeline = vec![
-        doc! {
-            "$match": {
-                "date": { "$gte": from_date, "$lte": to_date },
-                "mood_level": { "$exists": true, "$ne": null }
-            }
-        },
+        doc! { "$match": mood_match },
         doc! {
             "$group": {
                 "_id": "$mood_level",
@@ -322,10 +391,10 @@ pub async fn get_health_analytics(
     }
 
     // Health observations count
-    let health_observations_count = daily_records.count_documents(doc! {
-        "date": { "$gte": from_date, "$lte": to_date },
-        "health_observations": { "$exists": true, "$ne": null, "$ne": "" }
-    }, None).await? as i64;
+    let mut health_obs_match = base_match.clone();
+    health_obs_match.insert("health_observations", doc! { "$exists": true, "$ne": null, "$ne": "" });
+    
+    let health_observations_count = daily_records.count_documents(health_obs_match, None).await? as i64;
 
     Ok(Json(HealthAnalyticsResponse {
         success: true,
@@ -352,11 +421,22 @@ pub async fn get_activity_analytics(
 
     let (from_date, to_date) = get_date_range(params.from_date, params.to_date);
 
+    // Get rodent IDs filtered by species if specified
+    let rodent_ids = get_rodent_ids_by_species(&state, params.species.as_ref()).await?;
+    
+    // Build base match filter
+    let mut base_match = doc! {
+        "recorded_at": { "$gte": from_date, "$lte": to_date }
+    };
+    if let Some(ref filter) = build_rodent_filter(&rodent_ids) {
+        base_match.extend(filter.clone());
+    }
+
     let activities = state.db.activity_db.collection::<Document>("activities");
 
     // Total activity minutes
     let total_pipeline = vec![
-        doc! { "$match": { "recorded_at": { "$gte": from_date, "$lte": to_date } } },
+        doc! { "$match": base_match.clone() },
         doc! { "$group": { "_id": null, "total_minutes": { "$sum": "$duration_minutes" }, "session_count": { "$sum": 1 } } },
     ];
 
@@ -372,7 +452,7 @@ pub async fn get_activity_analytics(
 
     // By activity type
     let type_pipeline = vec![
-        doc! { "$match": { "recorded_at": { "$gte": from_date, "$lte": to_date } } },
+        doc! { "$match": base_match.clone() },
         doc! { "$group": { "_id": "$activity_type", "total_minutes": { "$sum": "$duration_minutes" }, "session_count": { "$sum": 1 } } },
         doc! { "$sort": { "total_minutes": -1 } },
     ];
@@ -392,7 +472,7 @@ pub async fn get_activity_analytics(
 
     // Activity by hour
     let hour_pipeline = vec![
-        doc! { "$match": { "recorded_at": { "$gte": from_date, "$lte": to_date } } },
+        doc! { "$match": base_match.clone() },
         doc! { "$group": { "_id": { "$hour": "$recorded_at" }, "total_minutes": { "$sum": "$duration_minutes" }, "session_count": { "$sum": 1 } } },
         doc! { "$sort": { "_id": 1 } },
     ];
@@ -409,7 +489,7 @@ pub async fn get_activity_analytics(
 
     // Activity by day of week
     let day_pipeline = vec![
-        doc! { "$match": { "recorded_at": { "$gte": from_date, "$lte": to_date } } },
+        doc! { "$match": base_match.clone() },
         doc! { "$group": { "_id": { "$dayOfWeek": "$recorded_at" }, "total_minutes": { "$sum": "$duration_minutes" }, "session_count": { "$sum": 1 } } },
         doc! { "$sort": { "_id": 1 } },
     ];
@@ -428,23 +508,41 @@ pub async fn get_activity_analytics(
 
     // Most active rodents
     let active_pipeline = vec![
-        doc! { "$match": { "recorded_at": { "$gte": from_date, "$lte": to_date } } },
+        doc! { "$match": base_match.clone() },
         doc! { "$group": { "_id": "$rodent_id", "total_minutes": { "$sum": "$duration_minutes" }, "session_count": { "$sum": 1 } } },
         doc! { "$sort": { "total_minutes": -1 } },
         doc! { "$limit": 10 },
     ];
 
     let mut active_cursor = activities.aggregate(active_pipeline, None).await?;
-    let mut most_active_rodents = Vec::new();
+    let mut rodent_stats_temp = Vec::new();
     while let Some(doc) = active_cursor.try_next().await? {
         let rodent_id = doc.get_object_id("_id").map(|id| id.to_hex()).unwrap_or_else(|_| "unknown".to_string());
-        most_active_rodents.push(RodentActivityStats {
-            rodent_id: rodent_id.clone(),
-            rodent_name: format!("Rodent {}", &rodent_id[..8.min(rodent_id.len())]),
-            total_minutes: get_number_as_i64(&doc, "total_minutes"),
-            session_count: get_number_as_i64(&doc, "session_count"),
-        });
+        rodent_stats_temp.push((
+            rodent_id,
+            get_number_as_i64(&doc, "total_minutes"),
+            get_number_as_i64(&doc, "session_count"),
+        ));
     }
+    
+    // Look up real rodent names
+    let rodent_ids: Vec<String> = rodent_stats_temp.iter().map(|(id, _, _)| id.clone()).collect();
+    let names_map = get_rodent_names_by_ids(&state, &rodent_ids).await?;
+    
+    let most_active_rodents: Vec<RodentActivityStats> = rodent_stats_temp
+        .into_iter()
+        .map(|(rodent_id, total_minutes, session_count)| {
+            let rodent_name = names_map.get(&rodent_id)
+                .cloned()
+                .unwrap_or_else(|| format!("Rodent {}", &rodent_id[..8.min(rodent_id.len())]));
+            RodentActivityStats {
+                rodent_id,
+                rodent_name,
+                total_minutes,
+                session_count,
+            }
+        })
+        .collect();
 
     Ok(Json(ActivityAnalyticsResponse {
         success: true,
@@ -472,11 +570,22 @@ pub async fn get_feeding_analytics(
 
     let (from_date, to_date) = get_date_range(params.from_date, params.to_date);
 
+    // Get rodent IDs filtered by species if specified
+    let rodent_ids = get_rodent_ids_by_species(&state, params.species.as_ref()).await?;
+    
+    // Build base match filter
+    let mut base_match = doc! {
+        "meal_time": { "$gte": from_date, "$lte": to_date }
+    };
+    if let Some(ref filter) = build_rodent_filter(&rodent_ids) {
+        base_match.extend(filter.clone());
+    }
+
     let feeding_records = state.db.activity_db.collection::<Document>("feeding_records");
 
     // Total food consumption
     let total_pipeline = vec![
-        doc! { "$match": { "meal_time": { "$gte": from_date, "$lte": to_date } } },
+        doc! { "$match": base_match.clone() },
         doc! { "$group": { "_id": null, "total_grams": { "$sum": "$quantity_grams" }, "feeding_count": { "$sum": 1 }, "consumed_fully_count": { "$sum": { "$cond": [{ "$eq": ["$consumed_fully", true] }, 1, 0] } } } },
     ];
 
@@ -493,7 +602,7 @@ pub async fn get_feeding_analytics(
 
     // By food type
     let type_pipeline = vec![
-        doc! { "$match": { "meal_time": { "$gte": from_date, "$lte": to_date } } },
+        doc! { "$match": base_match.clone() },
         doc! { "$group": { "_id": "$food_type", "total_grams": { "$sum": "$quantity_grams" }, "feeding_count": { "$sum": 1 } } },
         doc! { "$sort": { "total_grams": -1 } },
     ];
@@ -513,7 +622,7 @@ pub async fn get_feeding_analytics(
 
     // Feeding by hour
     let hour_pipeline = vec![
-        doc! { "$match": { "meal_time": { "$gte": from_date, "$lte": to_date } } },
+        doc! { "$match": base_match.clone() },
         doc! { "$group": { "_id": { "$hour": "$meal_time" }, "total_grams": { "$sum": "$quantity_grams" }, "feeding_count": { "$sum": 1 } } },
         doc! { "$sort": { "_id": 1 } },
     ];
@@ -530,23 +639,41 @@ pub async fn get_feeding_analytics(
 
     // Top consumers
     let consumers_pipeline = vec![
-        doc! { "$match": { "meal_time": { "$gte": from_date, "$lte": to_date } } },
+        doc! { "$match": base_match.clone() },
         doc! { "$group": { "_id": "$rodent_id", "total_grams": { "$sum": "$quantity_grams" }, "feeding_count": { "$sum": 1 } } },
         doc! { "$sort": { "total_grams": -1 } },
         doc! { "$limit": 10 },
     ];
 
     let mut consumers_cursor = feeding_records.aggregate(consumers_pipeline, None).await?;
-    let mut top_consumers = Vec::new();
+    let mut consumer_stats_temp = Vec::new();
     while let Some(doc) = consumers_cursor.try_next().await? {
         let rodent_id = doc.get_object_id("_id").map(|id| id.to_hex()).unwrap_or_else(|_| "unknown".to_string());
-        top_consumers.push(RodentFeedingStats {
-            rodent_id: rodent_id.clone(),
-            rodent_name: format!("Rodent {}", &rodent_id[..8.min(rodent_id.len())]),
-            total_grams: get_number_as_f64(&doc, "total_grams"),
-            feeding_count: get_number_as_i64(&doc, "feeding_count"),
-        });
+        consumer_stats_temp.push((
+            rodent_id,
+            get_number_as_f64(&doc, "total_grams"),
+            get_number_as_i64(&doc, "feeding_count"),
+        ));
     }
+    
+    // Look up real rodent names
+    let rodent_ids: Vec<String> = consumer_stats_temp.iter().map(|(id, _, _)| id.clone()).collect();
+    let names_map = get_rodent_names_by_ids(&state, &rodent_ids).await?;
+    
+    let top_consumers: Vec<RodentFeedingStats> = consumer_stats_temp
+        .into_iter()
+        .map(|(rodent_id, total_grams, feeding_count)| {
+            let rodent_name = names_map.get(&rodent_id)
+                .cloned()
+                .unwrap_or_else(|| format!("Rodent {}", &rodent_id[..8.min(rodent_id.len())]));
+            RodentFeedingStats {
+                rodent_id,
+                rodent_name,
+                total_grams,
+                feeding_count,
+            }
+        })
+        .collect();
 
     Ok(Json(FeedingAnalyticsResponse {
         success: true,
@@ -689,10 +816,22 @@ pub async fn get_weight_trends(
 
     let (from_date, to_date) = get_date_range(params.from_date, params.to_date);
 
+    // Get rodent IDs filtered by species if specified
+    let rodent_ids = get_rodent_ids_by_species(&state, params.species.as_ref()).await?;
+    
+    // Build base match filter
+    let mut base_match = doc! {
+        "date": { "$gte": from_date, "$lte": to_date },
+        "weight_grams": { "$exists": true, "$ne": null }
+    };
+    if let Some(ref filter) = build_rodent_filter(&rodent_ids) {
+        base_match.extend(filter.clone());
+    }
+
     let daily_records = state.db.activity_db.collection::<Document>("daily_records");
 
     let pipeline = vec![
-        doc! { "$match": { "date": { "$gte": from_date, "$lte": to_date }, "weight_grams": { "$exists": true, "$ne": null } } },
+        doc! { "$match": base_match },
         doc! { "$group": { "_id": { "$dateToString": { "format": "%Y-%m-%d", "date": "$date" } }, "value": { "$avg": "$weight_grams" }, "count": { "$sum": 1 } } },
         doc! { "$sort": { "_id": 1 } },
     ];
@@ -727,10 +866,21 @@ pub async fn get_activity_trends(
 
     let (from_date, to_date) = get_date_range(params.from_date, params.to_date);
 
+    // Get rodent IDs filtered by species if specified
+    let rodent_ids = get_rodent_ids_by_species(&state, params.species.as_ref()).await?;
+    
+    // Build base match filter
+    let mut base_match = doc! {
+        "recorded_at": { "$gte": from_date, "$lte": to_date }
+    };
+    if let Some(ref filter) = build_rodent_filter(&rodent_ids) {
+        base_match.extend(filter.clone());
+    }
+
     let activities = state.db.activity_db.collection::<Document>("activities");
 
     let pipeline = vec![
-        doc! { "$match": { "recorded_at": { "$gte": from_date, "$lte": to_date } } },
+        doc! { "$match": base_match },
         doc! { "$group": { "_id": { "$dateToString": { "format": "%Y-%m-%d", "date": "$recorded_at" } }, "value": { "$sum": "$duration_minutes" }, "count": { "$sum": 1 } } },
         doc! { "$sort": { "_id": 1 } },
     ];
@@ -765,10 +915,21 @@ pub async fn get_feeding_trends(
 
     let (from_date, to_date) = get_date_range(params.from_date, params.to_date);
 
+    // Get rodent IDs filtered by species if specified
+    let rodent_ids = get_rodent_ids_by_species(&state, params.species.as_ref()).await?;
+    
+    // Build base match filter
+    let mut base_match = doc! {
+        "meal_time": { "$gte": from_date, "$lte": to_date }
+    };
+    if let Some(ref filter) = build_rodent_filter(&rodent_ids) {
+        base_match.extend(filter.clone());
+    }
+
     let feeding_records = state.db.activity_db.collection::<Document>("feeding_records");
 
     let pipeline = vec![
-        doc! { "$match": { "meal_time": { "$gte": from_date, "$lte": to_date } } },
+        doc! { "$match": base_match },
         doc! { "$group": { "_id": { "$dateToString": { "format": "%Y-%m-%d", "date": "$meal_time" } }, "value": { "$sum": "$quantity_grams" }, "count": { "$sum": 1 } } },
         doc! { "$sort": { "_id": 1 } },
     ];

@@ -27,7 +27,7 @@ impl Config {
             analytics_service_url: env::var("ANALYTICS_SERVICE_URL")
                 .unwrap_or_else(|_| "http://localhost:8004".to_string()),
             rate_limit_requests: env::var("RATE_LIMIT_REQUESTS")
-                .unwrap_or_else(|_| "100".to_string())
+                .unwrap_or_else(|_| "200".to_string())
                 .parse()
                 .expect("RATE_LIMIT_REQUESTS must be a number"),
             rate_limit_window_secs: env::var("RATE_LIMIT_WINDOW_SECS")

@@ -26,7 +26,7 @@
     <!-- Quick Stats -->
     @if (dashboardSummary) {
       <div class="grid mb-4">
-        <div class="col-12 md:col-3">
+        <div class="col-12 md:col-4">
           <p-card styleClass="h-full">
             <div class="text-center">
               <i class="pi pi-heart-fill text-4xl text-pink-500 mb-2"></i>
@@ -35,7 +35,7 @@
             </div>
           </p-card>
         </div>
-        <div class="col-12 md:col-3">
+        <div class="col-12 md:col-4">
           <p-card styleClass="h-full">
             <div class="text-center">
               <i class="pi pi-clock text-4xl text-blue-500 mb-2"></i>
@@ -44,21 +44,12 @@
             </div>
           </p-card>
         </div>
-        <div class="col-12 md:col-3">
+        <div class="col-12 md:col-4">
           <p-card styleClass="h-full">
             <div class="text-center">
               <i class="pi pi-th-large text-4xl text-orange-500 mb-2"></i>
               <p class="text-color-secondary mb-1">Food Today</p>
               <p class="text-3xl font-bold m-0">{{ dashboardSummary.feeding.total_grams_today | number:'1.0-0' }}g</p>
-            </div>
-          </p-card>
-        </div>
-        <div class="col-12 md:col-3">
-          <p-card styleClass="h-full">
-            <div class="text-center">
-              <i class="pi pi-plus-circle text-4xl text-green-500 mb-2"></i>
-              <p class="text-color-secondary mb-1">New This Week</p>
-              <p class="text-3xl font-bold m-0">{{ dashboardSummary.population.recent_intakes_week }}</p>
             </div>
           </p-card>
         </div>
