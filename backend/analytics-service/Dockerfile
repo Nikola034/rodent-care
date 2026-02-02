@@ -17,8 +17,8 @@ COPY rodent-registry-service ./rodent-registry-service
 COPY activity-tracking-service ./activity-tracking-service
 COPY analytics-service ./analytics-service
 
-# Build the rodent-registry-service
-RUN cargo build --release --package rodent-registry-service
+# Build the analytics-service
+RUN cargo build --release --package analytics-service
 
 # Runtime stage
 FROM debian:bookworm-slim
@@ -32,8 +32,8 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy the built binary
-COPY --from=builder /app/target/release/rodent-registry-service /app/rodent-registry-service
+COPY --from=builder /app/target/release/analytics-service /app/analytics-service
 
-EXPOSE 8002
+EXPOSE 8004
 
-CMD ["/app/rodent-registry-service"]
+CMD ["/app/analytics-service"]

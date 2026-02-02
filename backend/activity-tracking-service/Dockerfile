@@ -1,5 +1,5 @@
 # Build stage
-FROM rust:1.75-slim-bookworm as builder
+FROM rust:1.88-slim-bookworm as builder
 
 WORKDIR /app
 
@@ -15,6 +15,7 @@ COPY user-service ./user-service
 COPY api-gateway ./api-gateway
 COPY rodent-registry-service ./rodent-registry-service
 COPY activity-tracking-service ./activity-tracking-service
+COPY analytics-service ./analytics-service
 
 # Build the activity-tracking-service
 RUN cargo build --release --package activity-tracking-service
