@@ -1,5 +1,5 @@
 # Build stage
-FROM rust:1.75-slim-bookworm as builder
+FROM rust:1.88-slim-bookworm as builder
 
 WORKDIR /app
 
@@ -12,9 +12,12 @@ RUN apt-get update && apt-get install -y \
 # Copy the workspace Cargo files
 COPY Cargo.toml ./
 
-# Copy the service source code
+# Copy all workspace members (required by workspace)
 COPY user-service ./user-service
 COPY api-gateway ./api-gateway
+COPY rodent-registry-service ./rodent-registry-service
+COPY activity-tracking-service ./activity-tracking-service
+COPY analytics-service ./analytics-service
 
 # Build the api-gateway
 RUN cargo build --release --package api-gateway

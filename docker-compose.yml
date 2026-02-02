@@ -10,7 +10,7 @@ services:
       POSTGRES_PASSWORD: rodentcare_password
       POSTGRES_DB: rodent_care_users
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
@@ -189,6 +189,20 @@ services:
       - rodent-registry-service
       - activity-tracking-service
       - analytics-service
+    networks:
+      - rodent-care-network
+    restart: unless-stopped
+
+  # Angular Frontend
+  frontend:
+    build:
+      context: ./frontend/rodent-care
+      dockerfile: Dockerfile
+    container_name: rodent-care-frontend
+    ports:
+      - "4200:80"
+    depends_on:
+      - api-gateway
     networks:
       - rodent-care-network
     restart: unless-stopped
